@@ -3,15 +3,15 @@ import express from "express";
 import { createServer } from "http";
 import net from "net";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
-import { registerStorageProxy } from "./storageProxy";
-import { registerLocalAuthRoutes } from "./localAuth";
-import { appRouter } from "../routers";
-import { createContext } from "./context";
-import { serveStatic, setupVite } from "./vite";
-import { storagePut } from "../storage";
-import { validateDirectUpload, MAX_PDF_UPLOAD_BYTES, MAX_VIDEO_UPLOAD_BYTES } from "../uploadPolicy";
-import { sdk } from "./sdk";
-import { ensureAdminAccount } from "./localAuth";
+import { registerStorageProxy } from "./storageProxy.js";
+import { registerLocalAuthRoutes } from "./localAuth.js";
+import { appRouter } from "../routers.js";
+import { createContext } from "./context.js";
+import { serveStatic, setupVite } from "./vite.js";
+import { storagePut } from "../storage.js";
+import { validateDirectUpload, MAX_PDF_UPLOAD_BYTES, MAX_VIDEO_UPLOAD_BYTES } from "../uploadPolicy.js";
+import { sdk } from "./sdk.js";
+import { ensureAdminAccount } from "./localAuth.js";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {

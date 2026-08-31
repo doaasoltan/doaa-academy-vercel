@@ -11,10 +11,10 @@ import {
   notifications,
   studentReports,
   users,
-} from "../drizzle/schema";
-import { calculateOverallProgress, calculateTrackProgress, levelFromProgress } from "./academyMetrics";
-import { gradeNotificationPayload, reportNotificationPayload } from "./notificationPayloads";
-import { ENV } from "./_core/env";
+} from "../drizzle/schema.js";
+import { calculateOverallProgress, calculateTrackProgress, levelFromProgress } from "./academyMetrics.js";
+import { gradeNotificationPayload, reportNotificationPayload } from "./notificationPayloads.js";
+import { ENV } from "./_core/env.js";
 
 let _db: ReturnType<typeof drizzle> | null = null;
 

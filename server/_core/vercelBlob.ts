@@ -1,7 +1,7 @@
 import type { Express, Request, Response } from "express";
 import { handleUpload } from "@vercel/blob/client";
-import { sdk } from "./sdk";
-import { validateDirectUpload, MAX_PDF_UPLOAD_BYTES, MAX_VIDEO_UPLOAD_BYTES } from "../uploadPolicy";
+import { sdk } from "./sdk.js";
+import { validateDirectUpload, MAX_PDF_UPLOAD_BYTES, MAX_VIDEO_UPLOAD_BYTES } from "../uploadPolicy.js";
 
 export function registerVercelBlobUploadRoute(app: Express) {
   app.post("/api/blob-upload", async (req: Request, res: Response) => {

@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { TrpcContext } from "./_core/context";
+import type { TrpcContext } from "./_core/context.js";
 
 const dbMocks = vi.hoisted(() => ({
   getStudentDashboard: vi.fn(),
@@ -9,12 +9,12 @@ const dbMocks = vi.hoisted(() => ({
 }));
 
 vi.mock("./db", async importOriginal => {
-  const original = await importOriginal<typeof import("./db")>();
+  const original = await importOriginal<typeof import("./db.js")>();
   return { ...original, ...dbMocks };
 });
 
-import { appRouter } from "./routers";
-import { gradeNotificationPayload, reportNotificationPayload } from "./notificationPayloads";
+import { appRouter } from "./routers.js";
+import { gradeNotificationPayload, reportNotificationPayload } from "./notificationPayloads.js";
 
 function context(role: "user" | "admin"): TrpcContext {
   return {

@@ -7,7 +7,7 @@ const storageMocks = vi.hoisted(() => ({
 
 vi.mock("./storage", () => storageMocks);
 
-import { decodeUploadChunk, finalizeChunkedUpload, MAX_UPLOAD_CHUNK_BYTES, storeUploadChunk } from "./chunkedUpload";
+import { decodeUploadChunk, finalizeChunkedUpload, MAX_UPLOAD_CHUNK_BYTES, storeUploadChunk } from "./chunkedUpload.js";
 
 function encodeForTransfer(data: Buffer) {
   const transformed = Buffer.from(data.map(byte => byte ^ 90));

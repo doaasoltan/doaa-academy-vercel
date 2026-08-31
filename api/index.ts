@@ -1,10 +1,10 @@
 import "dotenv/config";
 import express from "express";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
-import { registerLocalAuthRoutes, ensureAdminAccount } from "../server/_core/localAuth";
-import { appRouter } from "../server/routers";
-import { createContext } from "../server/_core/context";
-import { registerVercelBlobUploadRoute } from "../server/_core/vercelBlob";
+import { registerLocalAuthRoutes, ensureAdminAccount } from "../server/_core/localAuth.js";
+import { appRouter } from "../server/routers.js";
+import { createContext } from "../server/_core/context.js";
+import { registerVercelBlobUploadRoute } from "../server/_core/vercelBlob.js";
 
 const app = express();
 app.set("trust proxy", 1);

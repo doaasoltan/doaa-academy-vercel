@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { MAX_PDF_UPLOAD_BYTES, MAX_UPLOAD_BYTES, MAX_VIDEO_UPLOAD_BYTES, validateDirectUpload } from "./uploadPolicy";
+import { MAX_PDF_UPLOAD_BYTES, MAX_UPLOAD_BYTES, MAX_VIDEO_UPLOAD_BYTES, validateDirectUpload } from "./uploadPolicy.js";
 
 describe("validateDirectUpload", () => {
   it.each([

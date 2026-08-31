@@ -1,6 +1,6 @@
 import crypto from "node:crypto";
 import { promisify } from "node:util";
-import * as db from "../db";
+import * as db from "../db.js";
 
 const scryptAsync = promisify(crypto.scrypt);
 const KEYLEN = 64;

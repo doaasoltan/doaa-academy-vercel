@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { validateDirectUpload } from "./uploadPolicy";
+import { validateDirectUpload } from "./uploadPolicy.js";
 
 describe("direct upload inputs", () => {
   it("keeps PDF and video uploads within the approved direct-upload policy", () => {

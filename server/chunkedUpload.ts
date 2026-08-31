@@ -1,5 +1,5 @@
-import { storageGetBuffer, storagePut } from "./storage";
-import { validateDirectUpload, type UploadMimeType } from "./uploadPolicy";
+import { storageGetBuffer, storagePut } from "./storage.js";
+import { validateDirectUpload, type UploadMimeType } from "./uploadPolicy.js";
 
 const CHUNK_XOR_KEY = 90;
 export const MAX_UPLOAD_CHUNK_BYTES = 512 * 1024;

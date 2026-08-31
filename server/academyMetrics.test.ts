@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { calculateOverallProgress, calculateTrackProgress, gradeLabel, levelFromProgress } from "./academyMetrics";
+import { calculateOverallProgress, calculateTrackProgress, gradeLabel, levelFromProgress } from "./academyMetrics.js";
 
 describe("academy progress metrics", () => {
   it("calculates path completion safely and clamps invalid values", () => {

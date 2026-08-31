@@ -1,11 +1,11 @@
 import { COOKIE_NAME } from "@shared/const";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
-import * as db from "./db";
-import { getSessionCookieOptions } from "./_core/cookies";
-import { systemRouter } from "./_core/systemRouter";
-import { adminProcedure, protectedProcedure, publicProcedure, router } from "./_core/trpc";
-import { finalizeChunkedUpload, MAX_UPLOAD_CHUNKS, storeUploadChunk } from "./chunkedUpload";
+import * as db from "./db.js";
+import { getSessionCookieOptions } from "./_core/cookies.js";
+import { systemRouter } from "./_core/systemRouter.js";
+import { adminProcedure, protectedProcedure, publicProcedure, router } from "./_core/trpc.js";
+import { finalizeChunkedUpload, MAX_UPLOAD_CHUNKS, storeUploadChunk } from "./chunkedUpload.js";
 
 const levelSchema = z.enum(["مبتدئ", "متوسط", "متقدم"]);
 const pathInput = z.object({

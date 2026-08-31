@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
-import { createLessonWithDb } from "./db";
-import { lessons } from "../drizzle/schema";
+import { createLessonWithDb } from "./db.js";
+import { lessons } from "../drizzle/schema.js";
 
 describe("lesson persistence after upload", () => {
   it("saves the storage reference and publishes the lesson", async () => {

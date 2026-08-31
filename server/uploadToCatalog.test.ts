@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import type { TrpcContext } from "./_core/context";
+import type { TrpcContext } from "./_core/context.js";
 
 const dbMocks = vi.hoisted(() => ({
   createLesson: vi.fn(),
@@ -16,7 +16,7 @@ const chunkMocks = vi.hoisted(() => ({
 vi.mock("./db", () => dbMocks);
 vi.mock("./chunkedUpload", () => chunkMocks);
 
-import { appRouter } from "./routers";
+import { appRouter } from "./routers.js";
 
 function adminContext(): TrpcContext {
   return {

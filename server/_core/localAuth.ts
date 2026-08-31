@@ -1,11 +1,11 @@
 import { COOKIE_NAME, ONE_YEAR_MS } from "@shared/const";
 import type { Express, Request, Response } from "express";
-import * as db from "../db";
-import { getSessionCookieOptions } from "./cookies";
-import { sdk } from "./sdk";
-import { hashPassword, normalizeEmail, validatePassword, verifyPassword } from "./auth";
+import * as db from "../db.js";
+import { getSessionCookieOptions } from "./cookies.js";
+import { sdk } from "./sdk.js";
+import { hashPassword, normalizeEmail, validatePassword, verifyPassword } from "./auth.js";
 import crypto from "node:crypto";
-import { ENV } from "./env";
+import { ENV } from "./env.js";
 
 function setSession(res: Response, req: Request, token: string) {
   res.cookie(COOKIE_NAME, token, { ...getSessionCookieOptions(req), maxAge: ONE_YEAR_MS });

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
-import { notifications } from "../drizzle/schema";
-import { publishStudentReportWithDb, releaseAssessmentResultWithDb } from "./db";
+import { notifications } from "../drizzle/schema.js";
+import { publishStudentReportWithDb, releaseAssessmentResultWithDb } from "./db.js";
 
 function writerSpy() {
   const inserted: unknown[] = [];
