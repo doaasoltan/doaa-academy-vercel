@@ -1,4 +1,4 @@
-import { COOKIE_NAME } from "@shared/const";
+import { COOKIE_NAME } from "../shared/const.js";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import * as db from "./db.js";
