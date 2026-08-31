@@ -1,5 +1,5 @@
-export const MAX_PDF_UPLOAD_BYTES = 50 * 1024 * 1024;
-export const MAX_VIDEO_UPLOAD_BYTES = 100 * 1024 * 1024;
+export const MAX_PDF_UPLOAD_BYTES = 100 * 1024 * 1024;
+export const MAX_VIDEO_UPLOAD_BYTES = 1024 * 1024 * 1024;
 export const MAX_UPLOAD_BYTES = MAX_PDF_UPLOAD_BYTES;
 
 export const ALLOWED_UPLOAD_TYPES = [
@@ -24,7 +24,7 @@ export function validateDirectUpload(input: { fileName?: string; mimeType?: stri
   if (!Number.isFinite(input.bytes) || input.bytes < 1) return { ok: false, status: 400, message: "الملف فارغ أو غير صالح." };
   const isVideo = input.mimeType.startsWith("video/");
   const maxBytes = isVideo ? MAX_VIDEO_UPLOAD_BYTES : MAX_PDF_UPLOAD_BYTES;
-  if (input.bytes > maxBytes) return { ok: false, status: 413, message: isVideo ? "الحد الأقصى لحجم الفيديو هو 100 ميغابايت." : "الحد الأقصى لحجم ملف PDF هو 50 ميغابايت." };
+  if (input.bytes > maxBytes) return { ok: false, status: 413, message: isVideo ? "الحد الأقصى لحجم الفيديو هو 1 جيجابايت." : "الحد الأقصى لحجم ملف PDF هو 100 ميغابايت." };
 
   return {
     ok: true,

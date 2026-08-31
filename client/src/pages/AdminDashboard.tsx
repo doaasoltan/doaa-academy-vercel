@@ -178,9 +178,9 @@ function DirectFileUpload({ mode, currentFileName, onUploaded }: { mode: "docume
     const extension = file.name.split(".").pop()?.toLowerCase();
     const detectedType = file.type || (extension === "pdf" ? "application/pdf" : extension === "mp4" ? "video/mp4" : extension === "webm" ? "video/webm" : extension === "ogg" ? "video/ogg" : extension === "mov" ? "video/quicktime" : "");
     if (!accepted.includes(detectedType)) { toast.error(isVideo ? "الصيغ المدعومة: MP4 أو WEBM أو OGG أو MOV." : "يرجى اختيار ملف PDF فقط."); return; }
-    const maxBytes = isVideo ? 100 * 1024 * 1024 : 50 * 1024 * 1024;
+    const maxBytes = isVideo ? 1024 * 1024 * 1024 : 100 * 1024 * 1024;
     if (file.size < 1) { toast.error("الملف فارغ أو غير صالح."); return; }
-    if (file.size > maxBytes) { toast.error(isVideo ? "الحد الأقصى لحجم الفيديو هو 100 ميغابايت." : "الحد الأقصى لحجم ملف PDF هو 50 ميغابايت."); return; }
+    if (file.size > maxBytes) { toast.error(isVideo ? "الحد الأقصى لحجم الفيديو هو 1 جيجابايت." : "الحد الأقصى لحجم ملف PDF هو 100 ميغابايت."); return; }
     setUploading(true); setUploadProgress(0);
     try {
       const result = await uploadFileDirect(file, detectedType, value => setUploadProgress(value));
@@ -192,7 +192,7 @@ function DirectFileUpload({ mode, currentFileName, onUploaded }: { mode: "docume
       setUploadProgress(0);
     } finally { setUploading(false); }
   };
-  return <Label className="upload-dropzone"><Upload /><span>{uploading ? `يتم رفع الملف... ${uploadProgress}%` : currentFileName || (isVideo ? "اختاري ملف فيديو من جهازك" : "اختاري ملف PDF من جهازك")}</span><small>{isVideo ? "MP4 · WEBM · OGG · MOV · حتى 100 ميغابايت" : "PDF · حتى 50 ميغابايت"}</small>{uploading && <span className="upload-progress"><i style={{ width: `${uploadProgress}%` }} /></span>}<Input type="file" accept={acceptAttribute} className="hidden" onChange={e => void chooseFile(e.target.files?.[0])} disabled={uploading} /></Label>;
+  return <Label className="upload-dropzone"><Upload /><span>{uploading ? `يتم رفع الملف... ${uploadProgress}%` : currentFileName || (isVideo ? "اختاري ملف فيديو من جهازك" : "اختاري ملف PDF من جهازك")}</span><small>{isVideo ? "MP4 · WEBM · OGG · MOV · حتى 1 جيجابايت" : "PDF · حتى 100 ميغابايت"}</small>{uploading && <span className="upload-progress"><i style={{ width: `${uploadProgress}%` }} /></span>}<Input type="file" accept={acceptAttribute} className="hidden" onChange={e => void chooseFile(e.target.files?.[0])} disabled={uploading} /></Label>;
 }
 
 function uploadFileDirect(file: File, mimeType: string, onProgress: (value: number) => void): Promise<{ url: string; key: string; name: string }> {
