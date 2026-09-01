@@ -23,7 +23,7 @@ const lessonInput = z.object({
   summary: z.string().max(1000).optional(),
   content: z.string().max(30000).optional(),
   lessonType: z.enum(["video", "article", "workshop", "resource"]),
-  sourceUrl: z.string().max(1200).refine(value => value === "" || value.startsWith("/uploads/") || /^https?:\/\//.test(value), "رابط الفيديو غير صالح.").optional(),
+  sourceUrl: z.string().max(1200).refine(value => value === "" || value.startsWith("/uploads/") || value.startsWith("/api/blob-file?") || /^https?:\/\//.test(value), "رابط الفيديو غير صالح.").optional(),
   attachmentUrl: z.string().max(1200).optional(),
   attachmentName: z.string().max(220).optional(),
   durationMinutes: z.number().int().min(1).max(1000),

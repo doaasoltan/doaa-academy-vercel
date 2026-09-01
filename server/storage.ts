@@ -20,7 +20,7 @@ function appendHashSuffix(relKey: string): string {
 export async function storagePut(relKey: string, data: Buffer | Uint8Array | string, contentType = "application/octet-stream") {
   const key = appendHashSuffix(normalizeKey(relKey));
   if (isVercel) {
-    const blob = await put(key, typeof data === "string" ? Buffer.from(data) : data, { access: "public", contentType });
+    const blob = await put(key, typeof data === "string" ? Buffer.from(data) : data, { access: "private", contentType });
     return { key, url: blob.url };
   }
   const filePath = safePath(key); await fs.mkdir(path.dirname(filePath), { recursive: true });

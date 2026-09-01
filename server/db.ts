@@ -18,6 +18,21 @@ import { ENV } from "./_core/env.js";
 
 let _db: ReturnType<typeof drizzle> | null = null;
 
+function toProtectedBlobUrl(value: string | null | undefined) {
+  if (!value) return value;
+  if (value.startsWith("/api/blob-file?")) return value;
+  try {
+    const url = new URL(value);
+    if (url.hostname.endsWith(".private.blob.vercel-storage.com")) {
+      const pathname = url.pathname.replace(/^\/+/, "");
+      return `/api/blob-file?pathname=${encodeURIComponent(pathname)}`;
+    }
+  } catch {
+    // Keep non-URL values unchanged.
+  }
+  return value;
+}
+
 export async function getDb() {
   if (!_db && process.env.DATABASE_URL) {
     try {
@@ -122,7 +137,8 @@ export async function getLessonsByPath(pathId: number, publishedOnly = true) {
   if (!db) return [];
   const query = db.select().from(lessons).where(eq(lessons.pathId, pathId));
   const result = await query.orderBy(lessons.position);
-  return publishedOnly ? result.filter(lesson => lesson.isPublished) : result;
+  const visible = publishedOnly ? result.filter(lesson => lesson.isPublished) : result;
+  return visible.map(lesson => ({ ...lesson, sourceUrl: toProtectedBlobUrl(lesson.sourceUrl), attachmentUrl: toProtectedBlobUrl(lesson.attachmentUrl) }));
 }
 
 export async function createLesson(input: {
@@ -266,7 +282,8 @@ export async function getAdminOverview() {
     const averageScore = studentResults.length ? Math.round(studentResults.reduce((sum, item) => sum + item.result.score, 0) / studentResults.length) : null;
     return { ...student, progress, averageScore, currentLevel: levelFromProgress(progress), enrolledPathCount: enrolledPathIds.size };
   });
-  return { students, paths: pathRows, lessons: lessonRows, assessments: assessmentRows, results: resultRows, reports: reportRows };
+  const protectedLessons = lessonRows.map(lesson => ({ ...lesson, sourceUrl: toProtectedBlobUrl(lesson.sourceUrl), attachmentUrl: toProtectedBlobUrl(lesson.attachmentUrl) }));
+  return { students, paths: pathRows, lessons: protectedLessons, assessments: assessmentRows, results: resultRows, reports: reportRows };
 }
 
 export async function releaseAssessmentResult(input: {
