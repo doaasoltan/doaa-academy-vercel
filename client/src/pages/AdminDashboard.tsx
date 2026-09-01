@@ -1,4 +1,4 @@
-import { upload } from "@vercel/blob/client";
+import { uploadPresigned } from "@vercel/blob/client";
 import { useAuth } from "@/_core/hooks/useAuth";
 import DashboardLayout from "@/components/DashboardLayout";
 import { Badge } from "@/components/ui/badge";
@@ -196,23 +196,17 @@ function DirectFileUpload({ mode, currentFileName, onUploaded }: { mode: "docume
 }
 
 async function uploadFileDirect(file: File, mimeType: string, onProgress: (value: number) => void): Promise<{ url: string; key: string; name: string }> {
-  const tokenResponse = await fetch("/api/blob-token", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    credentials: "same-origin",
-    body: JSON.stringify({ fileName: file.name, mimeType }),
-  });
-
-  const tokenData = await tokenResponse.json().catch(() => ({}));
-  if (!tokenResponse.ok || !tokenData.token || !tokenData.pathname) {
-    throw new Error(tokenData.error || "تعذر تجهيز رفع الملف حالياً.");
-  }
+  const safeName = file.name
+    .replace(/[^\p{L}\p{N}._-]+/gu, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "") || "file";
+  const pathname = `academy/${Date.now()}-${safeName}`;
 
   try {
-    const blob = await upload(tokenData.pathname, file, {
-      token: tokenData.token,
+    const blob = await uploadPresigned(pathname, file, {
       access: "private",
-      multipart: file.size > 10 * 1024 * 1024,
+      handleUploadUrl: "/api/blob-upload",
+      multipart: file.size > 100 * 1024 * 1024,
       contentType: mimeType,
       onUploadProgress: ({ percentage }) => onProgress(Math.round(percentage)),
     });

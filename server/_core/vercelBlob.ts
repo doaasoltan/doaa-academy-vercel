@@ -1,74 +1,73 @@
 import type { Express, Request, Response } from "express";
 import { Readable } from "node:stream";
-import { get } from "@vercel/blob";
-import { generateClientTokenFromReadWriteToken } from "@vercel/blob/client";
-import { handleUpload } from "@vercel/blob/client";
+import { get, issueSignedToken } from "@vercel/blob";
+import { handleUploadPresigned } from "@vercel/blob/client";
 import { sdk } from "./sdk.js";
 import { validateDirectUpload, MAX_PDF_UPLOAD_BYTES, MAX_VIDEO_UPLOAD_BYTES } from "../uploadPolicy.js";
-
-export function registerVercelBlobTokenRoute(app: Express) {
-  app.post("/api/blob-token", async (req: Request, res: Response) => {
-    try {
-      const user = await sdk.authenticateRequest(req);
-      if (user.role !== "admin") {
-        return res.status(403).json({ error: "غير مصرح لكِ برفع الملفات." });
-      }
-
-      const fileName = String(req.body?.fileName ?? "").trim();
-      const mimeType = String(req.body?.mimeType ?? "").trim();
-      const isVideo = mimeType.startsWith("video/");
-      const validation = validateDirectUpload({ fileName, mimeType, bytes: 1 });
-      if (!validation.ok) {
-        return res.status(validation.status).json({ error: validation.message });
-      }
-
-      const pathname = `academy/${Date.now()}-${fileName}`;
-      const maxBytes = isVideo ? MAX_VIDEO_UPLOAD_BYTES : MAX_PDF_UPLOAD_BYTES;
-      const token = await generateClientTokenFromReadWriteToken({
-        pathname,
-        maximumSizeInBytes: maxBytes,
-        allowedContentTypes: [validation.mimeType],
-        validUntil: Date.now() + 6 * 60 * 60 * 1000,
-        addRandomSuffix: true,
-      });
-
-      return res.json({ token, pathname, mimeType: validation.mimeType, maxBytes });
-    } catch (error) {
-      console.error("[VercelBlob] Client token generation failed", error);
-      return res.status(500).json({
-        error: error instanceof Error ? error.message : "تعذر تجهيز رفع الملف.",
-      });
-    }
-  });
-}
 
 export function registerVercelBlobUploadRoute(app: Express) {
   app.post("/api/blob-upload", async (req: Request, res: Response) => {
     try {
-      const user = await sdk.authenticateRequest(req);
-      if (user.role !== "admin") return res.status(403).json({ error: "غير مصرح لكِ برفع الملفات." });
-      const token = await handleUpload({
+      const result = await handleUploadPresigned({
         body: req.body,
         request: req,
-        onBeforeGenerateToken: async (pathname) => {
+        getSignedToken: async (pathname, _clientPayload, _multipart) => {
+          const user = await sdk.authenticateRequest(req);
+          if (user.role !== "admin") {
+            throw new Error("غير مصرح لكِ برفع الملفات.");
+          }
+
           const fileName = pathname.split("/").pop() || pathname;
           const extension = fileName.split(".").pop()?.toLowerCase();
-          const mimeType = extension === "pdf" ? "application/pdf" : extension === "mp4" ? "video/mp4" : extension === "webm" ? "video/webm" : extension === "ogg" ? "video/ogg" : extension === "mov" ? "video/quicktime" : "";
+          const mimeType = extension === "pdf"
+            ? "application/pdf"
+            : extension === "mp4"
+              ? "video/mp4"
+              : extension === "webm"
+                ? "video/webm"
+                : extension === "ogg"
+                  ? "video/ogg"
+                  : extension === "mov"
+                    ? "video/quicktime"
+                    : "";
+
           const validation = validateDirectUpload({ fileName, mimeType, bytes: 1 });
           if (!validation.ok) throw new Error(validation.message);
-          const maxBytes = validation.mimeType.startsWith("video/") ? MAX_VIDEO_UPLOAD_BYTES : MAX_PDF_UPLOAD_BYTES;
-          return { allowedContentTypes: [validation.mimeType], addRandomSuffix: true, maximumSizeInBytes: maxBytes };
+
+          const maxBytes = validation.mimeType.startsWith("video/")
+            ? MAX_VIDEO_UPLOAD_BYTES
+            : MAX_PDF_UPLOAD_BYTES;
+
+          const token = await issueSignedToken({
+            pathname,
+            operations: ["put"],
+            validUntil: Date.now() + 2 * 60 * 60 * 1000,
+            allowedContentTypes: [validation.mimeType],
+            maximumSizeInBytes: maxBytes,
+          });
+
+          return {
+            token,
+            urlOptions: {
+              access: "private",
+              contentType: validation.mimeType,
+            },
+          };
         },
-        onUploadCompleted: async ({ blob }) => console.log("[VercelBlob] Upload completed", blob.url),
+        onUploadCompleted: async ({ blob }) => {
+          console.log("[VercelBlob] Presigned upload completed", blob.url);
+        },
       });
-      return res.json(token);
+
+      return res.json(result);
     } catch (error) {
-      console.error("[VercelBlob] Token generation failed", error);
-      return res.status(500).json({ error: error instanceof Error ? error.message : "تعذر تجهيز رفع الملف." });
+      console.error("[VercelBlob] Presigned upload failed", error);
+      return res.status(500).json({
+        error: error instanceof Error ? error.message : "تعذر تجهيز رفع الملف."
+      });
     }
   });
 }
-
 
 function isAllowedBlobPath(pathname: string) {
   return pathname.startsWith("academy/") &&
@@ -117,9 +116,7 @@ export function registerVercelBlobReadRoute(app: Express) {
         res.setHeader("Content-Length", String(result.blob.size));
       }
 
-      if (!result.stream) {
-        return res.end();
-      }
+      if (!result.stream) return res.end();
 
       Readable.fromWeb(
         result.stream as globalThis.ReadableStream<Uint8Array>,
