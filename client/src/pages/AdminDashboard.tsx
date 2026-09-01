@@ -195,17 +195,36 @@ function DirectFileUpload({ mode, currentFileName, onUploaded }: { mode: "docume
   return <Label className="upload-dropzone"><Upload /><span>{uploading ? `يتم رفع الملف... ${uploadProgress}%` : currentFileName || (isVideo ? "اختاري ملف فيديو من جهازك" : "اختاري ملف PDF من جهازك")}</span><small>{isVideo ? "MP4 · WEBM · OGG · MOV · حتى 1 جيجابايت" : "PDF · حتى 100 ميغابايت"}</small>{uploading && <span className="upload-progress"><i style={{ width: `${uploadProgress}%` }} /></span>}<Input type="file" accept={acceptAttribute} className="hidden" onChange={e => void chooseFile(e.target.files?.[0])} disabled={uploading} /></Label>;
 }
 
-function uploadFileDirect(file: File, mimeType: string, onProgress: (value: number) => void): Promise<{ url: string; key: string; name: string }> {
-  return new Promise((resolve, reject) => {
-    upload(`academy/${Date.now()}-${file.name}`, file, {
-      access: "private",
-      handleUploadUrl: "/api/blob-upload",
-      multipart: file.size > 10 * 1024 * 1024,
-      onUploadProgress: ({ percentage }) => onProgress(Math.round(percentage)),
-    })
-      .then(blob => resolve({ url: `/api/blob-file?pathname=${encodeURIComponent(blob.pathname)}`, key: blob.pathname, name: file.name }))
-      .catch(error => reject(error instanceof Error ? error : new Error("تعذر رفع الملف حالياً.")));
+async function uploadFileDirect(file: File, mimeType: string, onProgress: (value: number) => void): Promise<{ url: string; key: string; name: string }> {
+  const tokenResponse = await fetch("/api/blob-token", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "same-origin",
+    body: JSON.stringify({ fileName: file.name, mimeType }),
   });
+
+  const tokenData = await tokenResponse.json().catch(() => ({}));
+  if (!tokenResponse.ok || !tokenData.token || !tokenData.pathname) {
+    throw new Error(tokenData.error || "تعذر تجهيز رفع الملف حالياً.");
+  }
+
+  try {
+    const blob = await upload(tokenData.pathname, file, {
+      token: tokenData.token,
+      access: "private",
+      multipart: file.size > 10 * 1024 * 1024,
+      contentType: mimeType,
+      onUploadProgress: ({ percentage }) => onProgress(Math.round(percentage)),
+    });
+
+    return {
+      url: `/api/blob-file?pathname=${encodeURIComponent(blob.pathname)}`,
+      key: blob.pathname,
+      name: file.name,
+    };
+  } catch (error) {
+    throw error instanceof Error ? error : new Error("تعذر رفع الملف حالياً.");
+  }
 }
 
 function encodeUploadChunk(buffer: ArrayBuffer) {

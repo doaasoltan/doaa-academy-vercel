@@ -1,9 +1,46 @@
 import type { Express, Request, Response } from "express";
 import { Readable } from "node:stream";
 import { get } from "@vercel/blob";
+import { generateClientTokenFromReadWriteToken } from "@vercel/blob/client";
 import { handleUpload } from "@vercel/blob/client";
 import { sdk } from "./sdk.js";
 import { validateDirectUpload, MAX_PDF_UPLOAD_BYTES, MAX_VIDEO_UPLOAD_BYTES } from "../uploadPolicy.js";
+
+export function registerVercelBlobTokenRoute(app: Express) {
+  app.post("/api/blob-token", async (req: Request, res: Response) => {
+    try {
+      const user = await sdk.authenticateRequest(req);
+      if (user.role !== "admin") {
+        return res.status(403).json({ error: "غير مصرح لكِ برفع الملفات." });
+      }
+
+      const fileName = String(req.body?.fileName ?? "").trim();
+      const mimeType = String(req.body?.mimeType ?? "").trim();
+      const isVideo = mimeType.startsWith("video/");
+      const validation = validateDirectUpload({ fileName, mimeType, bytes: 1 });
+      if (!validation.ok) {
+        return res.status(validation.status).json({ error: validation.message });
+      }
+
+      const pathname = `academy/${Date.now()}-${fileName}`;
+      const maxBytes = isVideo ? MAX_VIDEO_UPLOAD_BYTES : MAX_PDF_UPLOAD_BYTES;
+      const token = await generateClientTokenFromReadWriteToken({
+        pathname,
+        maximumSizeInBytes: maxBytes,
+        allowedContentTypes: [validation.mimeType],
+        validUntil: Date.now() + 6 * 60 * 60 * 1000,
+        addRandomSuffix: true,
+      });
+
+      return res.json({ token, pathname, mimeType: validation.mimeType, maxBytes });
+    } catch (error) {
+      console.error("[VercelBlob] Client token generation failed", error);
+      return res.status(500).json({
+        error: error instanceof Error ? error.message : "تعذر تجهيز رفع الملف.",
+      });
+    }
+  });
+}
 
 export function registerVercelBlobUploadRoute(app: Express) {
   app.post("/api/blob-upload", async (req: Request, res: Response) => {
