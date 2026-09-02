@@ -17,12 +17,14 @@ export function registerVercelBlobUploadRoute(app: Express) {
         request: req,
         getSignedToken: async (pathname, _clientPayload, _multipart) => {
           const user = await sdk.authenticateRequest(req);
+
           if (user.role !== "admin") {
             throw new Error("غير مصرح لكِ برفع الملفات.");
           }
 
           const fileName = pathname.split("/").pop() || pathname;
           const extension = fileName.split(".").pop()?.toLowerCase();
+
           const mimeType =
             extension === "pdf"
               ? "application/pdf"
@@ -41,7 +43,10 @@ export function registerVercelBlobUploadRoute(app: Express) {
             mimeType,
             bytes: 1,
           });
-          if (!validation.ok) throw new Error(validation.message);
+
+          if (!validation.ok) {
+            throw new Error(validation.message);
+          }
 
           const maxBytes = validation.mimeType.startsWith("video/")
             ? MAX_VIDEO_UPLOAD_BYTES
@@ -63,14 +68,22 @@ export function registerVercelBlobUploadRoute(app: Express) {
             },
           };
         },
+
         onUploadCompleted: async ({ blob }) => {
-          console.log("[VercelBlob] Presigned upload completed", blob.url);
+          console.log(
+            "[VercelBlob] Presigned upload completed",
+            blob.url,
+          );
         },
       });
 
       return res.json(result);
     } catch (error) {
-      console.error("[VercelBlob] Presigned upload failed", error);
+      console.error(
+        "[VercelBlob] Presigned upload failed",
+        error,
+      );
+
       return res.status(500).json({
         error:
           error instanceof Error
@@ -92,7 +105,6 @@ function isAllowedBlobPath(pathname: string) {
 export function registerVercelBlobReadRoute(app: Express) {
   app.get("/api/blob-file", async (req: Request, res: Response) => {
     try {
-      // قراءة الملفات الخاصة متاحة فقط للمستخدم المسجل دخوله.
       await sdk.authenticateRequest(req);
 
       const rawPathname = String(req.query.pathname ?? "");
@@ -102,14 +114,10 @@ export function registerVercelBlobReadRoute(app: Express) {
         return res.status(400).send("مسار الملف غير صالح.");
       }
 
-      // المتصفح يرسل Range عند تشغيل/تحريك فيديو HTML5.
-      // نمرره إلى Vercel Blob ليعيد الجزء المطلوب فقط.
-      const range = req.header("range");
-
       const result = await get(pathname, {
         access: "private",
-        ifNoneMatch: req.header("if-none-match") ?? undefined,
-        headers: range ? { Range: range } : undefined,
+        ifNoneMatch:
+          req.header("if-none-match") ?? undefined,
       });
 
       if (!result) {
@@ -119,44 +127,47 @@ export function registerVercelBlobReadRoute(app: Express) {
       if (result.statusCode === 304) {
         res.status(304);
         res.setHeader("ETag", result.blob.etag);
-        res.setHeader("Cache-Control", "private, no-cache");
+        res.setHeader(
+          "Cache-Control",
+          "private, no-cache",
+        );
         return res.end();
       }
 
-      // get() في @vercel/blob يعيد statusCode=200 على مستوى الـ SDK،
-      // لذلك نحدد الاستجابة الجزئية اعتمادًا على Content-Range القادم
-      // من استجابة التخزين الفعلية.
-      const contentRange = result.headers.get("content-range");
-      const contentLength = result.headers.get("content-length");
-      const acceptRanges = result.headers.get("accept-ranges");
-      const contentType =
-        result.headers.get("content-type") ||
+      res.status(200);
+
+      res.setHeader(
+        "Content-Type",
         result.blob.contentType ||
-        "application/octet-stream";
+          "application/octet-stream",
+      );
 
-      const isPartial = Boolean(contentRange);
+      res.setHeader(
+        "X-Content-Type-Options",
+        "nosniff",
+      );
 
-      res.status(isPartial ? 206 : 200);
-      res.setHeader("Content-Type", contentType);
-      res.setHeader("X-Content-Type-Options", "nosniff");
       res.setHeader("ETag", result.blob.etag);
-      res.setHeader("Cache-Control", "private, no-cache");
-      res.setHeader("Accept-Ranges", acceptRanges || "bytes");
 
-      if (contentRange) {
-        res.setHeader("Content-Range", contentRange);
-      }
-
-      if (contentLength) {
-        res.setHeader("Content-Length", contentLength);
-      } else if (result.blob.size !== undefined && result.blob.size !== null) {
-        res.setHeader("Content-Length", String(result.blob.size));
-      }
+      res.setHeader(
+        "Cache-Control",
+        "private, no-cache",
+      );
 
       if (result.blob.contentDisposition) {
         res.setHeader(
           "Content-Disposition",
           result.blob.contentDisposition,
+        );
+      }
+
+      if (
+        result.blob.size !== undefined &&
+        result.blob.size !== null
+      ) {
+        res.setHeader(
+          "Content-Length",
+          String(result.blob.size),
         );
       }
 
@@ -168,8 +179,14 @@ export function registerVercelBlobReadRoute(app: Express) {
         result.stream as globalThis.ReadableStream<Uint8Array>,
       ).pipe(res);
     } catch (error) {
-      console.error("[VercelBlob] Private file read failed", error);
-      return res.status(500).send("تعذر قراءة الملف حالياً.");
+      console.error(
+        "[VercelBlob] Private file read failed",
+        error,
+      );
+
+      return res
+        .status(500)
+        .send("تعذر قراءة الملف حالياً.");
     }
   });
 }
