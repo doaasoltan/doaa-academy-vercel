@@ -3,7 +3,11 @@ import { Readable } from "node:stream";
 import { get, issueSignedToken } from "@vercel/blob";
 import { handleUploadPresigned } from "@vercel/blob/client";
 import { sdk } from "./sdk.js";
-import { validateDirectUpload, MAX_PDF_UPLOAD_BYTES, MAX_VIDEO_UPLOAD_BYTES } from "../uploadPolicy.js";
+import {
+  validateDirectUpload,
+  MAX_PDF_UPLOAD_BYTES,
+  MAX_VIDEO_UPLOAD_BYTES,
+} from "../uploadPolicy.js";
 
 export function registerVercelBlobUploadRoute(app: Express) {
   app.post("/api/blob-upload", async (req: Request, res: Response) => {
@@ -19,19 +23,24 @@ export function registerVercelBlobUploadRoute(app: Express) {
 
           const fileName = pathname.split("/").pop() || pathname;
           const extension = fileName.split(".").pop()?.toLowerCase();
-          const mimeType = extension === "pdf"
-            ? "application/pdf"
-            : extension === "mp4"
-              ? "video/mp4"
-              : extension === "webm"
-                ? "video/webm"
-                : extension === "ogg"
-                  ? "video/ogg"
-                  : extension === "mov"
-                    ? "video/quicktime"
-                    : "";
+          const mimeType =
+            extension === "pdf"
+              ? "application/pdf"
+              : extension === "mp4"
+                ? "video/mp4"
+                : extension === "webm"
+                  ? "video/webm"
+                  : extension === "ogg"
+                    ? "video/ogg"
+                    : extension === "mov"
+                      ? "video/quicktime"
+                      : "";
 
-          const validation = validateDirectUpload({ fileName, mimeType, bytes: 1 });
+          const validation = validateDirectUpload({
+            fileName,
+            mimeType,
+            bytes: 1,
+          });
           if (!validation.ok) throw new Error(validation.message);
 
           const maxBytes = validation.mimeType.startsWith("video/")
@@ -63,21 +72,27 @@ export function registerVercelBlobUploadRoute(app: Express) {
     } catch (error) {
       console.error("[VercelBlob] Presigned upload failed", error);
       return res.status(500).json({
-        error: error instanceof Error ? error.message : "تعذر تجهيز رفع الملف."
+        error:
+          error instanceof Error
+            ? error.message
+            : "تعذر تجهيز رفع الملف.",
       });
     }
   });
 }
 
 function isAllowedBlobPath(pathname: string) {
-  return pathname.startsWith("academy/") &&
+  return (
+    pathname.startsWith("academy/") &&
     !pathname.includes("..") &&
-    !pathname.includes("\\");
+    !pathname.includes("\\")
+  );
 }
 
 export function registerVercelBlobReadRoute(app: Express) {
   app.get("/api/blob-file", async (req: Request, res: Response) => {
     try {
+      // قراءة الملفات الخاصة متاحة فقط للمستخدم المسجل دخوله.
       await sdk.authenticateRequest(req);
 
       const rawPathname = String(req.query.pathname ?? "");
@@ -87,9 +102,14 @@ export function registerVercelBlobReadRoute(app: Express) {
         return res.status(400).send("مسار الملف غير صالح.");
       }
 
+      // المتصفح يرسل Range عند تشغيل/تحريك فيديو HTML5.
+      // نمرره إلى Vercel Blob ليعيد الجزء المطلوب فقط.
+      const range = req.header("range");
+
       const result = await get(pathname, {
         access: "private",
         ifNoneMatch: req.header("if-none-match") ?? undefined,
+        headers: range ? { Range: range } : undefined,
       });
 
       if (!result) {
@@ -103,20 +123,46 @@ export function registerVercelBlobReadRoute(app: Express) {
         return res.end();
       }
 
-      res.status(200);
-      res.setHeader("Content-Type", result.blob.contentType || "application/octet-stream");
+      // get() في @vercel/blob يعيد statusCode=200 على مستوى الـ SDK،
+      // لذلك نحدد الاستجابة الجزئية اعتمادًا على Content-Range القادم
+      // من استجابة التخزين الفعلية.
+      const contentRange = result.headers.get("content-range");
+      const contentLength = result.headers.get("content-length");
+      const acceptRanges = result.headers.get("accept-ranges");
+      const contentType =
+        result.headers.get("content-type") ||
+        result.blob.contentType ||
+        "application/octet-stream";
+
+      const isPartial = Boolean(contentRange);
+
+      res.status(isPartial ? 206 : 200);
+      res.setHeader("Content-Type", contentType);
       res.setHeader("X-Content-Type-Options", "nosniff");
       res.setHeader("ETag", result.blob.etag);
       res.setHeader("Cache-Control", "private, no-cache");
+      res.setHeader("Accept-Ranges", acceptRanges || "bytes");
 
-      if (result.blob.contentDisposition) {
-        res.setHeader("Content-Disposition", result.blob.contentDisposition);
+      if (contentRange) {
+        res.setHeader("Content-Range", contentRange);
       }
-      if (result.blob.size !== undefined && result.blob.size !== null) {
+
+      if (contentLength) {
+        res.setHeader("Content-Length", contentLength);
+      } else if (result.blob.size !== undefined && result.blob.size !== null) {
         res.setHeader("Content-Length", String(result.blob.size));
       }
 
-      if (!result.stream) return res.end();
+      if (result.blob.contentDisposition) {
+        res.setHeader(
+          "Content-Disposition",
+          result.blob.contentDisposition,
+        );
+      }
+
+      if (!result.stream) {
+        return res.end();
+      }
 
       Readable.fromWeb(
         result.stream as globalThis.ReadableStream<Uint8Array>,
