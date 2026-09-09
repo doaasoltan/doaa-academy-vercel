@@ -1,6 +1,6 @@
-
 import type { Express, Request, Response } from "express";
 import { Readable } from "node:stream";
+import type { ReadableStream as WebReadableStream } from "node:stream/web";
 import { get, issueSignedToken } from "@vercel/blob";
 import { handleUploadPresigned } from "@vercel/blob/client";
 import { sdk } from "./sdk.js";
@@ -61,13 +61,10 @@ export function registerVercelBlobUploadRoute(app: Express) {
             maximumSizeInBytes: maxBytes,
           });
 
-          return {
-            token,
-            urlOptions: {
-              access: "private",
-              contentType: validation.mimeType,
-            },
-          };
+          // NOTE: `urlOptions` only accepts presign-URL fields in @vercel/blob v2.
+          // `access`/`contentType` come from the client's `uploadPresigned` options,
+          // while the signed token already scopes pathname + content type + size.
+          return { token };
         },
 
         onUploadCompleted: async ({ blob }) => {
@@ -177,7 +174,7 @@ export function registerVercelBlobReadRoute(app: Express) {
       }
 
       Readable.fromWeb(
-        result.stream as globalThis.ReadableStream<Uint8Array>,
+        result.stream as unknown as WebReadableStream,
       ).pipe(res);
     } catch (error) {
       console.error(

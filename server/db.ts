@@ -15,6 +15,7 @@ import {
 import { calculateOverallProgress, calculateTrackProgress, levelFromProgress } from "./academyMetrics.js";
 import { gradeNotificationPayload, reportNotificationPayload } from "./notificationPayloads.js";
 import { ENV } from "./_core/env.js";
+import { demoStore, isDemoMode } from "./demoStore.js";
 
 let _db: ReturnType<typeof drizzle> | null = null;
 
@@ -57,6 +58,7 @@ export async function getDb() {
 }
 
 export async function upsertUser(user: InsertUser): Promise<void> {
+  if (isDemoMode()) return demoStore.upsertUser(user);
   if (!user.openId) throw new Error("User openId is required for upsert");
   const db = await getDb();
   if (!db) return;
@@ -83,6 +85,7 @@ export async function upsertUser(user: InsertUser): Promise<void> {
 
 
 export async function getUserByEmail(email: string) {
+  if (isDemoMode()) return demoStore.getUserByEmail(email);
   const db = await getDb();
   if (!db) return undefined;
   const result = await db.select().from(users).where(eq(users.email, email)).limit(1);
@@ -90,6 +93,7 @@ export async function getUserByEmail(email: string) {
 }
 
 export async function createUser(user: InsertUser) {
+  if (isDemoMode()) return demoStore.createUser(user);
   const db = await getDb();
   if (!db) throw new Error("قاعدة البيانات غير متاحة حالياً");
   const result = await db.insert(users).values(user);
@@ -97,6 +101,7 @@ export async function createUser(user: InsertUser) {
 }
 
 export async function getUserByOpenId(openId: string) {
+  if (isDemoMode()) return demoStore.getUserByOpenId(openId);
   const db = await getDb();
   if (!db) return undefined;
   const result = await db.select().from(users).where(eq(users.openId, openId)).limit(1);
@@ -104,6 +109,7 @@ export async function getUserByOpenId(openId: string) {
 }
 
 export async function getLearningPaths(publishedOnly = true) {
+  if (isDemoMode()) return demoStore.getLearningPaths(publishedOnly);
   const db = await getDb();
   if (!db) return [];
   const query = db.select().from(learningPaths);
@@ -120,6 +126,7 @@ export async function createLearningPath(input: {
   accent: string;
   estimatedHours: number;
 }) {
+  if (isDemoMode()) return demoStore.createLearningPath(input);
   const db = await getDb();
   if (!db) throw new Error("قاعدة البيانات غير متاحة حالياً");
   const result = await db.insert(learningPaths).values({ ...input, isPublished: false });
@@ -127,12 +134,14 @@ export async function createLearningPath(input: {
 }
 
 export async function setPathPublished(pathId: number, isPublished: boolean) {
+  if (isDemoMode()) return demoStore.setPathPublished(pathId, isPublished);
   const db = await getDb();
   if (!db) throw new Error("قاعدة البيانات غير متاحة حالياً");
   await db.update(learningPaths).set({ isPublished }).where(eq(learningPaths.id, pathId));
 }
 
 export async function getLessonsByPath(pathId: number, publishedOnly = true) {
+  if (isDemoMode()) return demoStore.getLessonsByPath(pathId, publishedOnly);
   const db = await getDb();
   if (!db) return [];
   const query = db.select().from(lessons).where(eq(lessons.pathId, pathId));
@@ -153,6 +162,7 @@ export async function createLesson(input: {
   durationMinutes: number;
   position: number;
 }) {
+  if (isDemoMode()) return demoStore.createLesson(input);
   const db = await getDb();
   if (!db) throw new Error("قاعدة البيانات غير متاحة حالياً");
   return createLessonWithDb(db, input);
@@ -175,6 +185,7 @@ export async function createLessonWithDb(db: any, input: {
 }
 
 export async function setLessonPublished(lessonId: number, isPublished: boolean) {
+  if (isDemoMode()) return demoStore.setLessonPublished(lessonId, isPublished);
   const db = await getDb();
   if (!db) throw new Error("قاعدة البيانات غير متاحة حالياً");
   await db.update(lessons).set({ isPublished }).where(eq(lessons.id, lessonId));
@@ -188,6 +199,7 @@ export async function createAssessment(input: {
   maxScore: number;
   position: number;
 }) {
+  if (isDemoMode()) return demoStore.createAssessment(input);
   const db = await getDb();
   if (!db) throw new Error("قاعدة البيانات غير متاحة حالياً");
   const result = await db.insert(assessments).values({ ...input, isPublished: false });
@@ -195,12 +207,14 @@ export async function createAssessment(input: {
 }
 
 export async function setAssessmentPublished(assessmentId: number, isPublished: boolean) {
+  if (isDemoMode()) return demoStore.setAssessmentPublished(assessmentId, isPublished);
   const db = await getDb();
   if (!db) throw new Error("قاعدة البيانات غير متاحة حالياً");
   await db.update(assessments).set({ isPublished }).where(eq(assessments.id, assessmentId));
 }
 
 export async function getAssessmentsByPath(pathId: number, publishedOnly = true) {
+  if (isDemoMode()) return demoStore.getAssessmentsByPath(pathId, publishedOnly);
   const db = await getDb();
   if (!db) return [];
   const rows = await db.select().from(assessments).where(eq(assessments.pathId, pathId)).orderBy(assessments.position);
@@ -208,12 +222,14 @@ export async function getAssessmentsByPath(pathId: number, publishedOnly = true)
 }
 
 export async function enrollStudent(studentId: number, pathId: number) {
+  if (isDemoMode()) return demoStore.enrollStudent(studentId, pathId);
   const db = await getDb();
   if (!db) throw new Error("قاعدة البيانات غير متاحة حالياً");
   await db.insert(enrollments).values({ studentId, pathId }).onDuplicateKeyUpdate({ set: { studentId } });
 }
 
 export async function completeLesson(studentId: number, lessonId: number) {
+  if (isDemoMode()) return demoStore.completeLesson(studentId, lessonId);
   const db = await getDb();
   if (!db) throw new Error("قاعدة البيانات غير متاحة حالياً");
   const lesson = (await db.select({ id: lessons.id, pathId: lessons.pathId, isPublished: lessons.isPublished }).from(lessons).where(eq(lessons.id, lessonId)).limit(1))[0];
@@ -225,6 +241,7 @@ export async function completeLesson(studentId: number, lessonId: number) {
 }
 
 export async function getStudentDashboard(studentId: number) {
+  if (isDemoMode()) return demoStore.getStudentDashboard(studentId);
   const db = await getDb();
   if (!db) return null;
 
@@ -258,6 +275,7 @@ export async function getStudentDashboard(studentId: number) {
 }
 
 export async function getAdminOverview() {
+  if (isDemoMode()) return demoStore.getAdminOverview();
   const db = await getDb();
   if (!db) return null;
   const [studentRows, pathRows, lessonRows, assessmentRows, resultRows, reportRows, enrollmentRows, progressRows] = await Promise.all([
@@ -293,6 +311,7 @@ export async function releaseAssessmentResult(input: {
   feedback?: string;
   reviewedById: number;
 }) {
+  if (isDemoMode()) return demoStore.releaseAssessmentResult(input);
   const db = await getDb();
   if (!db) throw new Error("قاعدة البيانات غير متاحة حالياً");
   await releaseAssessmentResultWithDb(db, input);
@@ -319,6 +338,7 @@ export async function publishStudentReport(input: {
   overallProgress: number;
   skills?: Array<{ label: string; value: number }>;
 }) {
+  if (isDemoMode()) return demoStore.publishStudentReport(input);
   const db = await getDb();
   if (!db) throw new Error("قاعدة البيانات غير متاحة حالياً");
   await publishStudentReportWithDb(db, input);
@@ -339,6 +359,7 @@ export async function publishStudentReportWithDb(db: any, input: {
 }
 
 export async function markNotificationRead(notificationId: number, studentId: number) {
+  if (isDemoMode()) return demoStore.markNotificationRead(notificationId, studentId);
   const db = await getDb();
   if (!db) return;
   await db.update(notifications).set({ isRead: true }).where(and(eq(notifications.id, notificationId), eq(notifications.recipientId, studentId)));

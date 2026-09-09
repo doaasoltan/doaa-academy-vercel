@@ -38,3 +38,18 @@
 
 ## تسجيل الدخول الحقيقي
 للنشر على الإنترنت راجعي `AUTH-DEPLOYMENT-AR.md`. تسجيل الدخول أصبح بالبريد وكلمة المرور، مع حساب أدمن من متغيرات البيئة وحسابات طلابية من صفحة إنشاء الحساب.
+
+## وضع العرض التجريبي (بدون MySQL)
+
+للتجربة السريعة بدون قاعدة بيانات، فعّلي `DEMO_MODE=true` في ملف `.env`:
+
+```env
+DEMO_MODE=true
+JWT_SECRET=ضع_مفتاحا_سريا_طويلا
+ADMIN_EMAIL=admin@demo.test
+ADMIN_PASSWORD=Admin1234
+```
+
+ثم شغّلي `npx tsx server/_core/index.ts`. تُحفظ البيانات محلياً في
+`uploads/.demo-data.json` مع مسار تجريبي وحساب طالبة (`student@demo.test / Demo1234`).
+وضع العرض للتجربة المحلية فقط ولا يُستخدم في الإنتاج (Vercel + TiDB).

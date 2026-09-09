@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 const storageMocks = vi.hoisted(() => ({
+  storageGetBuffer: vi.fn(),
   storageGetSignedUrl: vi.fn(),
   storagePut: vi.fn(),
 }));
@@ -37,8 +38,7 @@ describe("chunked upload encoding", () => {
     const chunk = Buffer.alloc(8 * 1024, 17);
     const chunkCount = 256;
     storageMocks.storagePut.mockImplementation(async (key: string) => ({ key, url: `/uploads/${key}` }));
-    storageMocks.storageGetSignedUrl.mockResolvedValue("https://storage.example/video-part");
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, arrayBuffer: async () => chunk.buffer.slice(chunk.byteOffset, chunk.byteOffset + chunk.byteLength) }));
+    storageMocks.storageGetBuffer.mockImplementation(async () => chunk);
     const chunkKeys: string[] = [];
     for (let index = 0; index < chunkCount; index += 1) {
       const stored = await storeUploadChunk({ userId: 10, uploadId: "22222222-2222-4222-8222-222222222222", chunkIndex: index, chunkData: encodeForTransfer(chunk) });
@@ -53,8 +53,7 @@ describe("chunked upload encoding", () => {
   it("stores, retrieves and combines a small PDF through the complete chunk workflow", async () => {
     const pdf = Buffer.from("%PDF-1.7\nsmall lesson");
     storageMocks.storagePut.mockResolvedValueOnce({ key: "academy/10/transfer/upload/00000.part", url: "/uploads/chunk" }).mockResolvedValueOnce({ key: "academy/10/lesson.pdf", url: "/uploads/academy/10/lesson.pdf" });
-    storageMocks.storageGetSignedUrl.mockResolvedValue("https://storage.example/chunk");
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, arrayBuffer: async () => pdf.buffer.slice(pdf.byteOffset, pdf.byteOffset + pdf.byteLength) }));
+    storageMocks.storageGetBuffer.mockResolvedValue(pdf);
 
     const chunk = await storeUploadChunk({ userId: 10, uploadId: "11111111-1111-4111-8111-111111111111", chunkIndex: 0, chunkData: encodeForTransfer(pdf) });
     const finalized = await finalizeChunkedUpload({ userId: 10, uploadId: "11111111-1111-4111-8111-111111111111", fileName: "lesson.pdf", mimeType: "application/pdf", chunkKeys: [chunk.key] });
