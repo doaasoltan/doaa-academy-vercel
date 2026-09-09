@@ -111,7 +111,7 @@ export default function AdminDashboard() {
 
             <section className="panel video-library">
               <div className="panel-heading"><div><span>محتوى مرئي</span><h2>الفيديوهات المضافة</h2></div><CreateVideoDialog paths={data.paths} onDone={refresh} /></div>
-              {data.lessons.filter(lesson => lesson.lessonType === "video").length ? <div className="lesson-admin-table">{data.lessons.filter(lesson => lesson.lessonType === "video").slice(0, 8).map(video => <div className="lesson-admin-row video-admin-row" key={video.id}><PlayCircle /><div><b>{video.title}</b><p>{data.paths.find(path => path.id === video.pathId)?.title ?? "مسار غير محدد"} · {video.durationMinutes} دقيقة · ملف مرفوع من الجهاز</p>{video.sourceUrl && <a className="file-open-link" href={video.sourceUrl} target="_blank" rel="noreferrer"><PlayCircle className="size-3" /> تشغيل الملف</a>}</div><Badge variant={video.isPublished ? "default" : "secondary"}>{video.isPublished ? "منشور" : "مسودة"}</Badge><Button variant="outline" size="sm" onClick={() => publishLesson.mutate({ lessonId: video.id, isPublished: !video.isPublished })}>{video.isPublished ? "إخفاء" : "نشر"}</Button></div>)}</div> : <AdminEmpty icon={PlayCircle} title="لا توجد فيديوهات مضافة" text="ارفعي ملف فيديو من جهازك ثم انشريه ليظهر للطالبات." />}
+              {data.lessons.filter(lesson => lesson.lessonType === "video").length ? <div className="lesson-admin-table">{data.lessons.filter(lesson => lesson.lessonType === "video").slice(0, 8).map(video => <div className="lesson-admin-row video-admin-row" key={video.id}><PlayCircle /><div><b>{video.title}</b><p>{data.paths.find(path => path.id === video.pathId)?.title ?? "مسار غير محدد"} · {video.durationMinutes} دقيقة · {video.sourceUrl && video.sourceUrl.startsWith("http") ? "رابط فيديو خارجي" : "ملف مرفوع من الجهاز"}</p>{video.sourceUrl && <a className="file-open-link" href={video.sourceUrl} target="_blank" rel="noreferrer"><PlayCircle className="size-3" /> تشغيل الفيديو</a>}</div><Badge variant={video.isPublished ? "default" : "secondary"}>{video.isPublished ? "منشور" : "مسودة"}</Badge><Button variant="outline" size="sm" onClick={() => publishLesson.mutate({ lessonId: video.id, isPublished: !video.isPublished })}>{video.isPublished ? "إخفاء" : "نشر"}</Button></div>)}</div> : <AdminEmpty icon={PlayCircle} title="لا توجد فيديوهات مضافة" text="ارفعي ملف فيديو من جهازك ثم انشريه ليظهر للطالبات." />}
             </section>
 
             <section className="panel assessment-library">
@@ -192,7 +192,7 @@ function DirectFileUpload({ mode, currentFileName, onUploaded }: { mode: "docume
       setUploadProgress(0);
     } finally { setUploading(false); }
   };
-  return <Label className="upload-dropzone"><Upload /><span>{uploading ? `يتم رفع الملف... ${uploadProgress}%` : currentFileName || (isVideo ? "اختاري ملف فيديو من جهازك" : "اختاري ملف PDF من جهازك")}</span><small>{isVideo ? "MP4 · WEBM · OGG · MOV · حتى 1 جيجابايت" : "PDF · حتى 100 ميغابايت"}</small>{uploading && <span className="upload-progress"><i style={{ width: `${uploadProgress}%` }} /></span>}<Input type="file" accept={acceptAttribute} className="hidden" onChange={e => void chooseFile(e.target.files?.[0])} disabled={uploading} /></Label>;
+  return <Label className="upload-dropzone"><Upload /><span>{uploading ? `يتم رفع الملف... ${uploadProgress}%` : currentFileName || (isVideo ? "اختاري ملف فيديو من جهازك" : "اختاري ملف PDF من جهازك")}</span><small>{isVideo ? "MP4 · WEBM · OGG · MOV · حتى 100 ميغابايت" : "PDF · حتى 50 ميغابايت"}</small>{uploading && <span className="upload-progress"><i style={{ width: `${uploadProgress}%` }} /></span>}<Input type="file" accept={acceptAttribute} className="hidden" onChange={e => void chooseFile(e.target.files?.[0])} disabled={uploading} /></Label>;
 }
 
 async function uploadFileDirect(file: File, mimeType: string, onProgress: (value: number) => void): Promise<{ url: string; key: string; name: string }> {
@@ -206,7 +206,7 @@ async function uploadFileDirect(file: File, mimeType: string, onProgress: (value
     const blob = await uploadPresigned(pathname, file, {
       access: "private",
       handleUploadUrl: "/api/blob-upload",
-      multipart: file.size > 100 * 1024 * 1024,
+      multipart: file.size > 50 * 1024 * 1024,
       contentType: mimeType,
       onUploadProgress: ({ percentage }) => onProgress(Math.round(percentage)),
     });

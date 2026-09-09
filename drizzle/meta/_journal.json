@@ -15,6 +15,13 @@
       "when": 1787870458818,
       "tag": "0001_strange_franklin_richards",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "5",
+      "when": 1788948842173,
+      "tag": "0002_add_users_password_hash",
+      "breakpoints": true
     }
   ]
 }

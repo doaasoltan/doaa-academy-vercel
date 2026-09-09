@@ -49,9 +49,9 @@ BLOB_READ_WRITE_TOKEN=...
 ## إعدادات Vercel المقترحة
 
 - Framework Preset: Vite أو Other
-- Build Command: `pnpm build:vercel`
+- Build Command: `npm run build:vercel`
 - Output Directory: `dist/client`
-- Install Command: `pnpm install --frozen-lockfile`
+- Install Command: `npm ci` (تلقائي عند وجود `package-lock.json`)
 
 الملف `vercel.json` موجود بالفعل.
 
