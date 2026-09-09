@@ -89,7 +89,7 @@ export default function AdminDashboard() {
                   <CreateVideoDialog paths={data.paths} onDone={refresh} />
                   <CreateAssessmentDialog paths={data.paths} onDone={refresh} />
                 </div>
-                <div className="process-note"><div><CheckCircle2 /><span>خط سير النشر</span></div><p>أنشئي المسار، ارفعي الدرس أو الفيديو من جهازك، وسيظهر للطالبات فور نجاح الحفظ. يمكنكِ إخفاؤه لاحقاً من القائمة.</p></div>
+                <div className="process-note"><div><CheckCircle2 /><span>خط سير النشر</span></div><p>أنشئي المسار، ثم ارفعي الدرس أو الفيديو من جهازك أو أضيفي رابط يوتيوب، وسيظهر للطالبات فور نجاح الحفظ. يمكنكِ إخفاؤه لاحقاً من القائمة.</p></div>
               </div>
             </section>
 
@@ -111,7 +111,7 @@ export default function AdminDashboard() {
 
             <section className="panel video-library">
               <div className="panel-heading"><div><span>محتوى مرئي</span><h2>الفيديوهات المضافة</h2></div><CreateVideoDialog paths={data.paths} onDone={refresh} /></div>
-              {data.lessons.filter(lesson => lesson.lessonType === "video").length ? <div className="lesson-admin-table">{data.lessons.filter(lesson => lesson.lessonType === "video").slice(0, 8).map(video => <div className="lesson-admin-row video-admin-row" key={video.id}><PlayCircle /><div><b>{video.title}</b><p>{data.paths.find(path => path.id === video.pathId)?.title ?? "مسار غير محدد"} · {video.durationMinutes} دقيقة · {video.sourceUrl && video.sourceUrl.startsWith("http") ? "رابط فيديو خارجي" : "ملف مرفوع من الجهاز"}</p>{video.sourceUrl && <a className="file-open-link" href={video.sourceUrl} target="_blank" rel="noreferrer"><PlayCircle className="size-3" /> تشغيل الفيديو</a>}</div><Badge variant={video.isPublished ? "default" : "secondary"}>{video.isPublished ? "منشور" : "مسودة"}</Badge><Button variant="outline" size="sm" onClick={() => publishLesson.mutate({ lessonId: video.id, isPublished: !video.isPublished })}>{video.isPublished ? "إخفاء" : "نشر"}</Button></div>)}</div> : <AdminEmpty icon={PlayCircle} title="لا توجد فيديوهات مضافة" text="ارفعي ملف فيديو من جهازك ثم انشريه ليظهر للطالبات." />}
+              {data.lessons.filter(lesson => lesson.lessonType === "video").length ? <div className="lesson-admin-table">{data.lessons.filter(lesson => lesson.lessonType === "video").slice(0, 8).map(video => <div className="lesson-admin-row video-admin-row" key={video.id}><PlayCircle /><div><b>{video.title}</b><p>{data.paths.find(path => path.id === video.pathId)?.title ?? "مسار غير محدد"} · {video.durationMinutes} دقيقة · {video.sourceUrl && video.sourceUrl.startsWith("http") ? "رابط فيديو خارجي" : "ملف مرفوع من الجهاز"}</p>{video.sourceUrl && <a className="file-open-link" href={video.sourceUrl} target="_blank" rel="noreferrer"><PlayCircle className="size-3" /> تشغيل الفيديو</a>}</div><Badge variant={video.isPublished ? "default" : "secondary"}>{video.isPublished ? "منشور" : "مسودة"}</Badge><Button variant="outline" size="sm" onClick={() => publishLesson.mutate({ lessonId: video.id, isPublished: !video.isPublished })}>{video.isPublished ? "إخفاء" : "نشر"}</Button></div>)}</div> : <AdminEmpty icon={PlayCircle} title="لا توجد فيديوهات مضافة" text="ارفعي ملف فيديو من جهازك أو أضيفي رابط يوتيوب، ثم انشريه ليظهر للطالبات." />}
             </section>
 
             <section className="panel assessment-library">
@@ -158,13 +158,16 @@ function CreateLessonDialog({ paths, onDone }: { paths: PathChoice[]; onDone: ()
 function CreateVideoDialog({ paths, onDone }: { paths: PathChoice[]; onDone: () => void }) {
   const [open, setOpen] = useState(() => new URLSearchParams(window.location.search).get("dialog") === "video");
   const create = trpc.admin.createLesson.useMutation({ onSuccess: () => { toast.success("تمت إضافة الفيديو ونشره للطالبات."); setOpen(false); onDone(); }, onError: error => toast.error(error.message) });
-  const [form, setForm] = useState({ pathId: 0, title: "", summary: "", sourceUrl: "", durationMinutes: 15, position: 1 });
+  const [form, setForm] = useState({ pathId: 0, title: "", summary: "", sourceUrl: "", externalUrl: "", durationMinutes: 15, position: 1 });
   const submit = (event: React.FormEvent) => {
     event.preventDefault();
-    if (!form.sourceUrl) { toast.error("ارفعي ملف الفيديو من جهازك أولاً."); return; }
-    create.mutate({ ...form, lessonType: "video", attachmentUrl: undefined, attachmentName: undefined });
+    const externalUrl = form.externalUrl.trim();
+    if (externalUrl && !/^https?:\/\/.+\..+/.test(externalUrl)) { toast.error("رابط الفيديو الخارجي غير صالح. الصقي رابط https صحيح."); return; }
+    const sourceUrl = form.sourceUrl || externalUrl;
+    if (!sourceUrl) { toast.error("ارفعي ملف الفيديو من جهازك أو أضيفي رابط يوتيوب."); return; }
+    create.mutate({ pathId: form.pathId, title: form.title, summary: form.summary, sourceUrl, durationMinutes: form.durationMinutes, position: form.position, lessonType: "video", attachmentUrl: undefined, attachmentName: undefined });
   };
-  return <Dialog open={open} onOpenChange={setOpen}><DialogTrigger asChild><Button variant="outline" className="quick-button" disabled={!paths.length}><PlayCircle /> إضافة فيديو</Button></DialogTrigger><DialogContent dir="rtl"><DialogHeader><DialogTitle>رفع فيديو جديد</DialogTitle><DialogDescription>اختاري ملف الفيديو من جهازك. بعد اكتمال الرفع، يُربط تلقائياً بالفيديو ولا تحتاجين إلى رابط خارجي.</DialogDescription></DialogHeader><form className="form-stack" onSubmit={submit}><Field label="المسار"><PathSelect paths={paths} value={form.pathId} onChange={pathId => setForm({ ...form, pathId })} /></Field><Field label="عنوان الفيديو"><Input required value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} placeholder="مثال: مقدمة إلى HTML" /></Field><Field label="وصف مختصر"><Textarea value={form.summary} onChange={e => setForm({ ...form, summary: e.target.value })} placeholder="ما الذي ستتعلمه الطالبة من الفيديو؟" /></Field><DirectFileUpload mode="video" currentFileName={form.sourceUrl ? "تم رفع ملف الفيديو" : ""} onUploaded={({ url }) => setForm({ ...form, sourceUrl: url })} /><Field label="مدة الفيديو بالدقائق"><Input required type="number" min="1" value={form.durationMinutes} onChange={e => setForm({ ...form, durationMinutes: Number(e.target.value) })} /></Field><Button className="academy-button" type="submit" disabled={create.isPending || !form.pathId || !form.sourceUrl}>{create.isPending ? "يتم الحفظ..." : "حفظ ونشر الفيديو"}</Button></form></DialogContent></Dialog>;
+  return <Dialog open={open} onOpenChange={setOpen}><DialogTrigger asChild><Button variant="outline" className="quick-button" disabled={!paths.length}><PlayCircle /> إضافة فيديو</Button></DialogTrigger><DialogContent dir="rtl"><DialogHeader><DialogTitle>إضافة فيديو جديد</DialogTitle><DialogDescription>ارفعي ملف فيديو من جهازك (حتى 100 ميغابايت)، أو الصقي رابط يوتيوب — روابط يوتيوب مجانية وبدون حد لعدد الفيديوهات. عند توفر الاثنين معاً يُستخدم الملف المرفوع.</DialogDescription></DialogHeader><form className="form-stack" onSubmit={submit}><Field label="المسار"><PathSelect paths={paths} value={form.pathId} onChange={pathId => setForm({ ...form, pathId })} /></Field><Field label="عنوان الفيديو"><Input required value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} placeholder="مثال: مقدمة إلى HTML" /></Field><Field label="وصف مختصر"><Textarea value={form.summary} onChange={e => setForm({ ...form, summary: e.target.value })} placeholder="ما الذي ستتعلمه الطالبة من الفيديو؟" /></Field><DirectFileUpload mode="video" currentFileName={form.sourceUrl ? "تم رفع ملف الفيديو" : ""} onUploaded={({ url }) => setForm({ ...form, sourceUrl: url })} /><Field label="رابط يوتيوب أو فيديو خارجي (اختياري)"><Input type="url" dir="ltr" value={form.externalUrl} onChange={e => setForm({ ...form, externalUrl: e.target.value })} placeholder="https://www.youtube.com/watch?v=..." /></Field><Field label="مدة الفيديو بالدقائق"><Input required type="number" min="1" value={form.durationMinutes} onChange={e => setForm({ ...form, durationMinutes: Number(e.target.value) })} /></Field><Button className="academy-button" type="submit" disabled={create.isPending || !form.pathId || (!form.sourceUrl && !form.externalUrl.trim())}>{create.isPending ? "يتم الحفظ..." : "حفظ ونشر الفيديو"}</Button></form></DialogContent></Dialog>;
 }
 
 function DirectFileUpload({ mode, currentFileName, onUploaded }: { mode: "document" | "video"; currentFileName: string; onUploaded: (file: { url: string; name: string }) => void }) {
@@ -178,9 +181,9 @@ function DirectFileUpload({ mode, currentFileName, onUploaded }: { mode: "docume
     const extension = file.name.split(".").pop()?.toLowerCase();
     const detectedType = file.type || (extension === "pdf" ? "application/pdf" : extension === "mp4" ? "video/mp4" : extension === "webm" ? "video/webm" : extension === "ogg" ? "video/ogg" : extension === "mov" ? "video/quicktime" : "");
     if (!accepted.includes(detectedType)) { toast.error(isVideo ? "الصيغ المدعومة: MP4 أو WEBM أو OGG أو MOV." : "يرجى اختيار ملف PDF فقط."); return; }
-    const maxBytes = isVideo ? 1024 * 1024 * 1024 : 100 * 1024 * 1024;
+    const maxBytes = isVideo ? 100 * 1024 * 1024 : 50 * 1024 * 1024;
     if (file.size < 1) { toast.error("الملف فارغ أو غير صالح."); return; }
-    if (file.size > maxBytes) { toast.error(isVideo ? "الحد الأقصى لحجم الفيديو هو 1 جيجابايت." : "الحد الأقصى لحجم ملف PDF هو 100 ميغابايت."); return; }
+    if (file.size > maxBytes) { toast.error(isVideo ? "الحد الأقصى لحجم الفيديو هو 100 ميغابايت." : "الحد الأقصى لحجم ملف PDF هو 50 ميغابايت."); return; }
     setUploading(true); setUploadProgress(0);
     try {
       const result = await uploadFileDirect(file, detectedType, value => setUploadProgress(value));
@@ -217,8 +220,26 @@ async function uploadFileDirect(file: File, mimeType: string, onProgress: (value
       name: file.name,
     };
   } catch (error) {
-    throw error instanceof Error ? error : new Error("تعذر رفع الملف حالياً.");
+    // Fallback for local/demo servers without Vercel Blob: use the local upload endpoint.
+    try {
+      return await uploadFileLocal(file, mimeType, onProgress);
+    } catch {
+      throw error instanceof Error ? error : new Error("تعذر رفع الملف حالياً.");
+    }
   }
+}
+
+async function uploadFileLocal(file: File, mimeType: string, onProgress: (value: number) => void): Promise<{ url: string; key: string; name: string }> {
+  onProgress(5);
+  const response = await fetch("/api/local-upload", {
+    method: "POST",
+    headers: { "Content-Type": mimeType, "x-file-name": encodeURIComponent(file.name), "x-file-type": mimeType },
+    body: file,
+  });
+  const data = await response.json().catch(() => null);
+  if (!response.ok || !data?.url) throw new Error(data?.error || "تعذر رفع الملف حالياً.");
+  onProgress(100);
+  return { url: data.url, key: data.key ?? "", name: file.name };
 }
 
 function encodeUploadChunk(buffer: ArrayBuffer) {
