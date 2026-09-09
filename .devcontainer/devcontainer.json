@@ -1,0 +1,13 @@
+{
+  "name": "Doaa Academy Demo",
+  "image": "mcr.microsoft.com/devcontainers/javascript-node:22",
+  "postCreateCommand": "npm install && bash scripts/setup-demo-env.sh",
+  "postStartCommand": "bash scripts/start-demo.sh",
+  "forwardPorts": [3000],
+  "portsAttributes": {
+    "3000": {
+      "label": "Academy Demo",
+      "onAutoForward": "notify"
+    }
+  }
+}
