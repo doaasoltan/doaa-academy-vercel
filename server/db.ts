@@ -13,7 +13,7 @@ import {
   users,
 } from "../drizzle/schema.js";
 import { calculateOverallProgress, calculateTrackProgress, levelFromProgress } from "./academyMetrics.js";
-import { gradeNotificationPayload, reportNotificationPayload } from "./notificationPayloads.js";
+import { gradeNotificationPayload, newAssessmentNotificationPayload, newVideoNotificationPayload, reportNotificationPayload, type NotificationPayload } from "./notificationPayloads.js";
 import { ENV } from "./_core/env.js";
 import { demoStore, isDemoMode } from "./demoStore.js";
 
@@ -165,7 +165,15 @@ export async function createLesson(input: {
   if (isDemoMode()) return demoStore.createLesson(input);
   const db = await getDb();
   if (!db) throw new Error("قاعدة البيانات غير متاحة حالياً");
-  return createLessonWithDb(db, input);
+  const result = await createLessonWithDb(db, input);
+  if (input.lessonType === "video") {
+    const pathRows = await db.select().from(learningPaths).where(eq(learningPaths.id, input.pathId));
+    const path = pathRows[0];
+    if (path) {
+      await notifyPathStudentsWithDb(db, input.pathId, newVideoNotificationPayload(path.title, input.title, input.pathId));
+    }
+  }
+  return result;
 }
 
 export async function createLessonWithDb(db: any, input: {
@@ -210,7 +218,38 @@ export async function setAssessmentPublished(assessmentId: number, isPublished: 
   if (isDemoMode()) return demoStore.setAssessmentPublished(assessmentId, isPublished);
   const db = await getDb();
   if (!db) throw new Error("قاعدة البيانات غير متاحة حالياً");
+  const before = await db.select().from(assessments).where(eq(assessments.id, assessmentId));
   await db.update(assessments).set({ isPublished }).where(eq(assessments.id, assessmentId));
+  // Notify enrolled students only on the draft -> published transition.
+  if (isPublished && before[0] && !before[0].isPublished) {
+    const pathRows = await db.select().from(learningPaths).where(eq(learningPaths.id, before[0].pathId));
+    const path = pathRows[0];
+    if (path) {
+      await notifyPathStudentsWithDb(db, before[0].pathId, newAssessmentNotificationPayload(path.title, before[0].title, before[0].pathId));
+    }
+  }
+}
+
+/**
+ * Creates one in-app notification for every student enrolled in the given
+ * path. Returns silently when nobody is enrolled yet.
+ */
+export async function notifyPathStudents(pathId: number, payload: NotificationPayload) {
+  if (isDemoMode()) return demoStore.notifyPathStudents(pathId, payload);
+  const db = await getDb();
+  if (!db) return;
+  return notifyPathStudentsWithDb(db, pathId, payload);
+}
+
+async function notifyPathStudentsWithDb(db: any, pathId: number, payload: NotificationPayload) {
+  const rows = await db.select({ studentId: enrollments.studentId }).from(enrollments).where(eq(enrollments.pathId, pathId));
+  const studentIds = [...new Set(rows.map((item: { studentId: number }) => item.studentId))];
+  if (!studentIds.length) return 0;
+  const now = new Date();
+  await db.insert(notifications).values(
+    studentIds.map(studentId => ({ ...payload, recipientId: studentId, isRead: false, createdAt: now })),
+  );
+  return studentIds.length;
 }
 
 export async function getLessonById(lessonId: number) {

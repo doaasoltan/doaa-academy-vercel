@@ -20,7 +20,7 @@ import type {
   User,
 } from "../drizzle/schema.js";
 import { calculateOverallProgress, calculateTrackProgress, levelFromProgress } from "./academyMetrics.js";
-import { gradeNotificationPayload, reportNotificationPayload } from "./notificationPayloads.js";
+import { gradeNotificationPayload, newAssessmentNotificationPayload, newVideoNotificationPayload, reportNotificationPayload, type NotificationPayload } from "./notificationPayloads.js";
 import { ENV } from "./_core/env.js";
 
 export function isDemoMode() {
@@ -423,8 +423,28 @@ async function createLesson(input: {
     createdAt: now,
     updatedAt: now,
   });
+  if (input.lessonType === "video") {
+    const path = getState().learningPaths.find(item => item.id === input.pathId);
+    if (path) notifyPathStudents(input.pathId, newVideoNotificationPayload(path.title, input.title, input.pathId));
+  }
   persist();
   return { id };
+}
+
+function notifyPathStudents(pathId: number, payload: NotificationPayload) {
+  const store = getState();
+  const studentIds = [...new Set(store.enrollments.filter(item => item.pathId === pathId).map(item => item.studentId))];
+  if (!studentIds.length) return;
+  const now = new Date();
+  for (const studentId of studentIds) {
+    store.notifications.push({
+      id: nextId("notifications"),
+      recipientId: studentId,
+      ...payload,
+      isRead: false,
+      createdAt: now,
+    });
+  }
 }
 
 async function setLessonPublished(lessonId: number, isPublished: boolean) {
@@ -463,10 +483,16 @@ async function createAssessment(input: {
 }
 
 async function setAssessmentPublished(assessmentId: number, isPublished: boolean) {
-  const found = getState().assessments.find(item => item.id === assessmentId);
+  const store = getState();
+  const found = store.assessments.find(item => item.id === assessmentId);
   if (found) {
+    const wasPublished = found.isPublished;
     found.isPublished = isPublished;
     found.updatedAt = new Date();
+    if (isPublished && !wasPublished) {
+      const path = store.learningPaths.find(item => item.id === found.pathId);
+      if (path) notifyPathStudents(found.pathId, newAssessmentNotificationPayload(path.title, found.title, found.pathId));
+    }
     persist();
   }
 }
@@ -710,6 +736,7 @@ export const demoStore = {
   createAssessment,
   setAssessmentPublished,
   deleteAssessmentById,
+  notifyPathStudents,
   deleteLearningPath,
   getAssessmentsByPath,
   enrollStudent,
