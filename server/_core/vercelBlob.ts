@@ -1,7 +1,5 @@
 import type { Express, Request, Response } from "express";
-import { Readable } from "node:stream";
-import type { ReadableStream as WebReadableStream } from "node:stream/web";
-import { get, issueSignedToken } from "@vercel/blob";
+import { issueSignedToken, presignUrl } from "@vercel/blob";
 import { handleUploadPresigned } from "@vercel/blob/client";
 import { sdk } from "./sdk.js";
 import {
@@ -146,6 +144,55 @@ function isAllowedBlobPath(pathname: string) {
   );
 }
 
+/**
+ * Signed read URLs stay valid for 24h: a student watching a long video
+ * issues new Range requests (seeks) against the same URL, and a page that
+ * stays open must keep seeking without expiry. Re-opening the page always
+ * re-authenticates and issues a fresh URL, which bounds the exposure of a
+ * leaked URL to roughly one viewing session per day.
+ */
+const SIGNED_READ_URL_TTL_MS = 24 * 60 * 60 * 1000;
+const SIGNED_READ_URL_CACHE_MAX = 500;
+
+// Per-instance cache so a warm function serves repeated views from memory
+// instead of calling the /signed-token API each time — that call counts
+// against the store's monthly operations quota.
+const signedReadUrlCache = new Map<
+  string,
+  { url: string; expiresAt: number }
+>();
+
+async function getSignedReadUrl(pathname: string): Promise<string> {
+  const now = Date.now();
+  const cached = signedReadUrlCache.get(pathname);
+  if (cached && cached.expiresAt > now) return cached.url;
+
+  const signed = await issueSignedToken({
+    pathname,
+    operations: ["get"],
+    validUntil: now + SIGNED_READ_URL_TTL_MS,
+  });
+
+  const { presignedUrl } = await presignUrl(signed, {
+    operation: "get",
+    pathname,
+    access: "private",
+  });
+
+  signedReadUrlCache.set(pathname, {
+    url: presignedUrl,
+    expiresAt: now + SIGNED_READ_URL_TTL_MS,
+  });
+
+  if (signedReadUrlCache.size > SIGNED_READ_URL_CACHE_MAX) {
+    // Map keeps insertion order; drop the oldest entry to bound memory.
+    const oldest = signedReadUrlCache.keys().next().value;
+    if (oldest !== undefined) signedReadUrlCache.delete(oldest);
+  }
+
+  return presignedUrl;
+}
+
 export function registerVercelBlobReadRoute(app: Express) {
   app.get("/api/blob-file", async (req: Request, res: Response) => {
     try {
@@ -165,70 +212,13 @@ export function registerVercelBlobReadRoute(app: Express) {
         return res.status(503).send(BLOB_NOT_CONFIGURED_MESSAGE);
       }
 
-      const result = await get(pathname, {
-        access: "private",
-        ifNoneMatch:
-          req.header("if-none-match") ?? undefined,
-      });
-
-      if (!result) {
-        return res.status(404).send("الملف غير موجود.");
-      }
-
-      if (result.statusCode === 304) {
-        res.status(304);
-        res.setHeader("ETag", result.blob.etag);
-        res.setHeader(
-          "Cache-Control",
-          "private, no-cache",
-        );
-        return res.end();
-      }
-
-      res.status(200);
-
-      res.setHeader(
-        "Content-Type",
-        result.blob.contentType ||
-          "application/octet-stream",
-      );
-
-      res.setHeader(
-        "X-Content-Type-Options",
-        "nosniff",
-      );
-
-      res.setHeader("ETag", result.blob.etag);
-
-      res.setHeader(
-        "Cache-Control",
-        "private, no-cache",
-      );
-
-      if (result.blob.contentDisposition) {
-        res.setHeader(
-          "Content-Disposition",
-          result.blob.contentDisposition,
-        );
-      }
-
-      if (
-        result.blob.size !== undefined &&
-        result.blob.size !== null
-      ) {
-        res.setHeader(
-          "Content-Length",
-          String(result.blob.size),
-        );
-      }
-
-      if (!result.stream) {
-        return res.end();
-      }
-
-      Readable.fromWeb(
-        result.stream as unknown as WebReadableStream,
-      ).pipe(res);
+      // Redirect to a time-limited signed URL so the browser streams
+      // directly from the Blob CDN edge (with Range/seek support) instead of
+      // proxying every byte through this function. Serverless functions have
+      // a lifetime cap (60s on the Hobby plan), so a long video proxied
+      // through the function would be cut off mid-stream.
+      const signedUrl = await getSignedReadUrl(pathname);
+      return res.redirect(302, signedUrl);
     } catch (error) {
       if (isBlobNotConfiguredError(error)) {
         console.warn(

@@ -1,17 +1,16 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { AddressInfo } from "node:net";
-import { Readable } from "node:stream";
 import express from "express";
 
 const blobMocks = vi.hoisted(() => ({
-  get: vi.fn(),
   issueSignedToken: vi.fn(),
+  presignUrl: vi.fn(),
   handleUploadPresigned: vi.fn(),
 }));
 
 vi.mock("@vercel/blob", () => ({
-  get: blobMocks.get,
   issueSignedToken: blobMocks.issueSignedToken,
+  presignUrl: blobMocks.presignUrl,
 }));
 
 vi.mock("@vercel/blob/client", () => ({
@@ -35,6 +34,9 @@ import {
   warnIfBlobNotConfigured,
 } from "./_core/vercelBlob.js";
 
+const SDK_NO_CREDENTIALS_ERROR =
+  "Vercel Blob: No blob credentials found. Pass a `token` option, set `BLOB_READ_WRITE_TOKEN`, or use `oidcToken` (or `VERCEL_OIDC_TOKEN`) with `storeId` or `BLOB_STORE_ID`.";
+
 async function startApp() {
   const app = express();
   app.use(express.json({ limit: "2mb" }));
@@ -53,17 +55,21 @@ async function startApp() {
   };
 }
 
-function toWebStream(data: Buffer) {
-  return Readable.toWeb(Readable.from([data])) as unknown as ReadableStream;
-}
-
 beforeEach(() => {
   vi.stubEnv("BLOB_READ_WRITE_TOKEN", "");
   vi.stubEnv("BLOB_STORE_ID", "");
   sdkMocks.authenticateRequest.mockResolvedValue({ role: "admin" });
+  blobMocks.issueSignedToken.mockResolvedValue({
+    clientSigningToken: "client-signing-token",
+    delegationToken: "delegation-token",
+  });
+  blobMocks.presignUrl.mockResolvedValue({
+    presignedUrl:
+      "https://abc123.private.blob.vercel-storage.com/academy/lesson.mp4?vercel-blob-signature=signed",
+  });
 });
 
-afterEach(async () => {
+afterEach(() => {
   vi.unstubAllEnvs();
   vi.resetAllMocks();
 });
@@ -84,10 +90,7 @@ describe("blob credential detection", () => {
   });
 
   it("recognizes the SDK missing-credentials error", () => {
-    const sdkError = new Error(
-      "Vercel Blob: No blob credentials found. Pass a `token` option, set `BLOB_READ_WRITE_TOKEN`, or use `oidcToken` (or `VERCEL_OIDC_TOKEN`) with `storeId` or `BLOB_STORE_ID`.",
-    );
-    expect(isBlobNotConfiguredError(sdkError)).toBe(true);
+    expect(isBlobNotConfiguredError(new Error(SDK_NO_CREDENTIALS_ERROR))).toBe(true);
     expect(isBlobNotConfiguredError(BLOB_NOT_CONFIGURED_MESSAGE)).toBe(true);
     expect(
       isBlobNotConfiguredError(new Error("Vercel Blob: Blob not found.")),
@@ -116,11 +119,13 @@ describe("/api/blob-file (private read)", () => {
     try {
       const response = await fetch(
         `${base}/api/blob-file?pathname=${encodeURIComponent("academy/lesson.mp4")}`,
+        { redirect: "manual" },
       );
 
       expect(response.status).toBe(503);
       expect(await response.text()).toBe(BLOB_NOT_CONFIGURED_MESSAGE);
-      expect(blobMocks.get).not.toHaveBeenCalled();
+      expect(blobMocks.issueSignedToken).not.toHaveBeenCalled();
+      expect(blobMocks.presignUrl).not.toHaveBeenCalled();
     } finally {
       server.close();
     }
@@ -132,58 +137,79 @@ describe("/api/blob-file (private read)", () => {
     try {
       const response = await fetch(
         `${base}/api/blob-file?pathname=${encodeURIComponent("../etc/passwd")}`,
+        { redirect: "manual" },
       );
 
       expect(response.status).toBe(400);
-      expect(blobMocks.get).not.toHaveBeenCalled();
+      expect(blobMocks.issueSignedToken).not.toHaveBeenCalled();
     } finally {
       server.close();
     }
   });
 
-  it("reads through the SDK when a store id is configured", async () => {
+  it("redirects to a signed CDN URL when credentials are configured", async () => {
     vi.stubEnv("BLOB_STORE_ID", "abc123");
-    const body = Buffer.from("video-bytes");
-    blobMocks.get.mockResolvedValue({
-      statusCode: 200,
-      stream: toWebStream(body),
-      blob: {
-        url: "https://abc123.private.blob.vercel-storage.com/academy/lesson.mp4",
-        pathname: "academy/lesson.mp4",
-        contentType: "video/mp4",
-        contentDisposition: "",
-        size: body.byteLength,
-        etag: "etag-1",
-      },
-    });
 
     const { server, base } = await startApp();
 
     try {
       const response = await fetch(
-        `${base}/api/blob-file?pathname=${encodeURIComponent("academy/lesson.mp4")}`,
+        `${base}/api/blob-file?pathname=${encodeURIComponent("academy/lesson-a.mp4")}`,
+        { redirect: "manual" },
       );
 
-      expect(response.status).toBe(200);
-      expect(response.headers.get("content-type")).toBe("video/mp4");
-      expect(Buffer.from(await response.arrayBuffer()).toString()).toBe(
-        body.toString(),
+      expect(response.status).toBe(302);
+      expect(response.headers.get("location")).toBe(
+        "https://abc123.private.blob.vercel-storage.com/academy/lesson.mp4?vercel-blob-signature=signed",
       );
-      expect(blobMocks.get).toHaveBeenCalledWith(
-        "academy/lesson.mp4",
-        expect.objectContaining({ access: "private" }),
+
+      // The signed token is scoped to exactly this file and only "get".
+      expect(blobMocks.issueSignedToken).toHaveBeenCalledWith(
+        expect.objectContaining({
+          pathname: "academy/lesson-a.mp4",
+          operations: ["get"],
+        }),
+      );
+      expect(blobMocks.presignUrl).toHaveBeenCalledWith(
+        expect.objectContaining({
+          clientSigningToken: "client-signing-token",
+          delegationToken: "delegation-token",
+        }),
+        expect.objectContaining({
+          operation: "get",
+          pathname: "academy/lesson-a.mp4",
+          access: "private",
+        }),
       );
     } finally {
       server.close();
     }
   });
 
-  it("still returns 503 if the SDK rejects auth mid-request", async () => {
+  it("serves repeated views from the per-instance cache (one token call)", async () => {
     vi.stubEnv("BLOB_STORE_ID", "abc123");
-    blobMocks.get.mockRejectedValue(
-      new Error(
-        "Vercel Blob: No blob credentials found. Pass a `token` option, set `BLOB_READ_WRITE_TOKEN`, or use `oidcToken` (or `VERCEL_OIDC_TOKEN`) with `storeId` or `BLOB_STORE_ID`.",
-      ),
+
+    const { server, base } = await startApp();
+    const url = `${base}/api/blob-file?pathname=${encodeURIComponent("academy/lesson-b.mp4")}`;
+
+    try {
+      const first = await fetch(url, { redirect: "manual" });
+      const second = await fetch(url, { redirect: "manual" });
+
+      expect(first.status).toBe(302);
+      expect(second.status).toBe(302);
+      expect(first.headers.get("location")).toBe(second.headers.get("location"));
+      expect(blobMocks.issueSignedToken).toHaveBeenCalledTimes(1);
+      expect(blobMocks.presignUrl).toHaveBeenCalledTimes(1);
+    } finally {
+      server.close();
+    }
+  });
+
+  it("still returns 503 if the SDK reports missing credentials mid-request", async () => {
+    vi.stubEnv("BLOB_STORE_ID", "abc123");
+    blobMocks.issueSignedToken.mockRejectedValue(
+      new Error(SDK_NO_CREDENTIALS_ERROR),
     );
 
     const { server, base } = await startApp();
@@ -191,6 +217,7 @@ describe("/api/blob-file (private read)", () => {
     try {
       const response = await fetch(
         `${base}/api/blob-file?pathname=${encodeURIComponent("academy/lesson.mp4")}`,
+        { redirect: "manual" },
       );
 
       expect(response.status).toBe(503);
@@ -223,21 +250,20 @@ describe("/api/blob-upload (presigned upload)", () => {
 
   it("issues a signed token for admins when credentials are configured", async () => {
     vi.stubEnv("BLOB_READ_WRITE_TOKEN", "store_abc_token");
-    blobMocks.issueSignedToken.mockResolvedValue("signed-token-123");
     blobMocks.handleUploadPresigned.mockImplementation(
       async (config: {
         getSignedToken: (
           pathname: string,
           clientPayload: unknown,
           multipart: boolean,
-        ) => Promise<{ token: string }>;
+        ) => Promise<{ token: { clientSigningToken: string; delegationToken: string } }>;
       }) => {
         const { token } = await config.getSignedToken(
           "academy/lesson.pdf",
           null,
           false,
         );
-        return { status: 200, body: JSON.stringify({ token }) };
+        return { status: 200, body: JSON.stringify(token) };
       },
     );
 
@@ -250,12 +276,10 @@ describe("/api/blob-upload (presigned upload)", () => {
         body: JSON.stringify({ pathname: "academy/lesson.pdf" }),
       });
 
-      const data = await response.json();
       expect(response.status).toBe(200);
       expect(blobMocks.issueSignedToken).toHaveBeenCalledWith(
         expect.objectContaining({ pathname: "academy/lesson.pdf" }),
       );
-      expect(data.body).toContain("signed-token-123");
     } finally {
       server.close();
     }
