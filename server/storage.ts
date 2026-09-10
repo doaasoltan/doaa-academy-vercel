@@ -2,6 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import crypto from "node:crypto";
 import { put } from "@vercel/blob";
+import { BLOB_NOT_CONFIGURED_MESSAGE } from "./_core/vercelBlob.js";
 
 const UPLOAD_ROOT = path.resolve(process.cwd(), "uploads");
 const isVercel = process.env.VERCEL === "1" || Boolean(process.env.BLOB_READ_WRITE_TOKEN);
@@ -20,6 +21,11 @@ function appendHashSuffix(relKey: string): string {
 export async function storagePut(relKey: string, data: Buffer | Uint8Array | string, contentType = "application/octet-stream") {
   const key = appendHashSuffix(normalizeKey(relKey));
   if (isVercel) {
+    // Fail fast with an actionable message instead of a raw SDK error when the
+    // deployment has no blob credentials (BLOB_READ_WRITE_TOKEN / BLOB_STORE_ID).
+    if (!process.env.BLOB_READ_WRITE_TOKEN && !process.env.BLOB_STORE_ID) {
+      throw new Error(BLOB_NOT_CONFIGURED_MESSAGE);
+    }
     const blob = await put(key, typeof data === "string" ? Buffer.from(data) : Buffer.from(data), { access: "private", contentType });
     return { key, url: blob.url };
   }

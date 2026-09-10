@@ -9,6 +9,7 @@ import { appRouter } from "../routers.js";
 import { createContext } from "./context.js";
 import { serveStatic, setupVite } from "./vite.js";
 import { storagePut } from "../storage.js";
+import { BLOB_NOT_CONFIGURED_MESSAGE, isBlobNotConfiguredError } from "./vercelBlob.js";
 import { validateDirectUpload, MAX_PDF_UPLOAD_BYTES, MAX_VIDEO_UPLOAD_BYTES } from "../uploadPolicy.js";
 import { sdk } from "./sdk.js";
 import { ensureAdminAccount } from "./localAuth.js";
@@ -62,6 +63,10 @@ async function startServer() {
         const stored = await storagePut(`academy/${user.id}/${Date.now()}-${validation.safeName}`, body, validation.mimeType);
         return res.json({ url: stored.url, key: stored.key, name: validation.safeName });
       } catch (error) {
+        if (isBlobNotConfiguredError(error)) {
+          console.warn("[LocalUpload] Upload rejected: blob credentials are not configured.");
+          return res.status(503).json({ error: BLOB_NOT_CONFIGURED_MESSAGE });
+        }
         console.error("[LocalUpload] Upload failed", error);
         return res.status(500).json({ error: error instanceof Error ? error.message : "تعذر رفع الملف حالياً." });
       }

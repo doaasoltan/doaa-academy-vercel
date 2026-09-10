@@ -58,3 +58,25 @@ BLOB_READ_WRITE_TOKEN=...
 ## ملاحظة
 
 لا يوجد داخل هذه الحزمة حساب MySQL أو Blob حقيقي، لأن بياناتهما مرتبطة بحسابك ولا ينبغي تضمينها في ZIP أو GitHub.
+
+## استكشاف الأخطاء: «No blob credentials found»
+
+إذا ظهر في سجلات Vercel خطأ على `/api/blob-file` أو `/api/blob-upload` بالشكل التالي:
+
+```
+[VercelBlob] Private file read failed BlobError: Vercel Blob: No blob credentials found.
+Pass a `token` option, set `BLOB_READ_WRITE_TOKEN`, or use `oidcToken` ...
+```
+
+فهذا يعني أن التطبيق لا يجد بيانات اعتماد Vercel Blob. عند حدوثه تظهر الصفحة رسالة عربية واضحة (كود 503)
+بدلاً من كود 500، ويُطبع تحذير في بداية سجلات الدالة.
+
+الخطوات:
+
+1. تأكدي من وجود **Blob Store** مربوط بالمشروع: لوحة Vercel ← مشروعك ← **Storage** ← Vercel Blob.
+   إن لم يوجد أنشئي واحداً واربطيه بالمشروع.
+2. أضيفي متغير البيئة `BLOB_READ_WRITE_TOKEN` بقيمته (يظهر في صفحة الـ Blob Store) للبيئات Production وPreview وDevelopment.
+   - بديل بلا توكن دائم: أضيفي متغير `BLOB_STORE_ID` فقط (معرف المخزن)؛ Vercel يوفر `VERCEL_OIDC_TOKEN`
+     تلقائياً داخل الدوال فلا حاجة لتوكن يدوي.
+3. أعيدي النشر (Redeploy) حتى تُقرأ المتغيرات الجديدة.
+4. الملفات التي لم ينجح رفعها قبل الإصلاح يجب إعادة رفعها من لوحة الأدمن.

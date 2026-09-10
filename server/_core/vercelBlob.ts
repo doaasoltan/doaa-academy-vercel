@@ -10,8 +10,47 @@ import {
   MAX_VIDEO_UPLOAD_BYTES,
 } from "../uploadPolicy.js";
 
+export const BLOB_NOT_CONFIGURED_MESSAGE =
+  "خدمة التخزين السحابي (Vercel Blob) غير مُهيأة بعد: اضبطي متغير BLOB_READ_WRITE_TOKEN (أو BLOB_STORE_ID) في إعدادات مشروع Vercel ثم أعيدي المحاولة.";
+
+/**
+ * The Vercel Blob SDK needs one of:
+ * - `BLOB_READ_WRITE_TOKEN` (long-lived read/write token), or
+ * - `BLOB_STORE_ID` — on Vercel the `VERCEL_OIDC_TOKEN` environment variable is
+ *   injected automatically, which is enough for OIDC auth.
+ */
+export function hasBlobCredentials(): boolean {
+  return (
+    Boolean(process.env.BLOB_READ_WRITE_TOKEN) ||
+    Boolean(process.env.BLOB_STORE_ID)
+  );
+}
+
+/** True when the failure is "no blob credentials configured" (not a real storage error). */
+export function isBlobNotConfiguredError(error: unknown): boolean {
+  const message =
+    error instanceof Error ? error.message : String(error);
+  return /No blob credentials found|Vercel Blob[\s):)]*غير/i.test(message);
+}
+
+export function warnIfBlobNotConfigured(): void {
+  if (process.env.VERCEL === "1" && !hasBlobCredentials()) {
+    console.warn(
+      "[VercelBlob] تحذير: لا توجد بيانات اعتماد Vercel Blob — رفع الملفات وقراءة الملفات الخاصة لن يعمل. " +
+        "اربطي Blob Store بالمشروع واضبطي BLOB_READ_WRITE_TOKEN (أو BLOB_STORE_ID) في Environment Variables ثم أعيدي النشر. " +
+        "(No blob credentials found: set BLOB_READ_WRITE_TOKEN or BLOB_STORE_ID in the project environment variables.)",
+    );
+  }
+}
+
 export function registerVercelBlobUploadRoute(app: Express) {
   app.post("/api/blob-upload", async (req: Request, res: Response) => {
+    if (!hasBlobCredentials()) {
+      console.warn(
+        "[VercelBlob] Upload rejected: blob credentials are not configured.",
+      );
+      return res.status(503).json({ error: BLOB_NOT_CONFIGURED_MESSAGE });
+    }
     try {
       const result = await handleUploadPresigned({
         body: req.body,
@@ -77,6 +116,13 @@ export function registerVercelBlobUploadRoute(app: Express) {
 
       return res.json(result);
     } catch (error) {
+      if (isBlobNotConfiguredError(error)) {
+        console.warn(
+          "[VercelBlob] Upload rejected: blob credentials are not configured.",
+        );
+        return res.status(503).json({ error: BLOB_NOT_CONFIGURED_MESSAGE });
+      }
+
       console.error(
         "[VercelBlob] Presigned upload failed",
         error,
@@ -110,6 +156,13 @@ export function registerVercelBlobReadRoute(app: Express) {
 
       if (!pathname || !isAllowedBlobPath(pathname)) {
         return res.status(400).send("مسار الملف غير صالح.");
+      }
+
+      if (!hasBlobCredentials()) {
+        console.warn(
+          "[VercelBlob] Private file read rejected: blob credentials are not configured.",
+        );
+        return res.status(503).send(BLOB_NOT_CONFIGURED_MESSAGE);
       }
 
       const result = await get(pathname, {
@@ -177,6 +230,13 @@ export function registerVercelBlobReadRoute(app: Express) {
         result.stream as unknown as WebReadableStream,
       ).pipe(res);
     } catch (error) {
+      if (isBlobNotConfiguredError(error)) {
+        console.warn(
+          "[VercelBlob] Private file read rejected: blob credentials are not configured.",
+        );
+        return res.status(503).send(BLOB_NOT_CONFIGURED_MESSAGE);
+      }
+
       console.error(
         "[VercelBlob] Private file read failed",
         error,
