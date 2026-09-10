@@ -1,6 +1,7 @@
 import { uploadPresigned } from "@vercel/blob/client";
 import { useAuth } from "@/_core/hooks/useAuth";
 import DashboardLayout from "@/components/DashboardLayout";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
@@ -11,15 +12,15 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
-import { BarChart3, BookOpen, CheckCircle2, ClipboardCheck, FilePlus2, FileText, GraduationCap, LayoutDashboard, Link2, PlayCircle, Plus, Send, Sparkles, Upload, Users } from "lucide-react";
+import { BarChart3, BookOpen, CheckCircle2, ClipboardCheck, FilePlus2, FileText, GraduationCap, LayoutDashboard, Link2, PlayCircle, Plus, Send, Sparkles, Trash2, Upload, Users } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
 
 const menu = [
-  { icon: LayoutDashboard, label: "لوحة الإدارة", path: "/admin" },
-  { icon: BookOpen, label: "المسارات والدروس", path: "/admin" },
-  { icon: ClipboardCheck, label: "الاختبارات والنتائج", path: "/admin" },
-  { icon: Users, label: "متابعة الطلاب", path: "/admin" },
+  { icon: LayoutDashboard, label: "لوحة الإدارة", path: "/admin", anchor: "top" },
+  { icon: BookOpen, label: "المسارات والدروس", path: "/admin", anchor: "admin-paths" },
+  { icon: ClipboardCheck, label: "الاختبارات والنتائج", path: "/admin", anchor: "admin-assessments" },
+  { icon: Users, label: "متابعة الطلاب", path: "/admin", anchor: "admin-students" },
 ];
 
 type PathChoice = { id: number; title: string };
@@ -38,6 +39,12 @@ export default function AdminDashboard() {
   const publishPath = trpc.admin.publishPath.useMutation({ onSuccess: refresh });
   const publishLesson = trpc.admin.publishLesson.useMutation({ onSuccess: refresh });
   const publishAssessment = trpc.admin.publishAssessment.useMutation({ onSuccess: refresh });
+  const deletePath = trpc.admin.deletePath.useMutation({ onSuccess: () => { toast.success("تم حذف المسار وكل محتواه."); refresh(); }, onError: error => toast.error(error.message) });
+  const deleteLesson = trpc.admin.deleteLesson.useMutation({ onSuccess: () => { toast.success("تم حذف المحتوى وملفاته."); refresh(); }, onError: error => toast.error(error.message) });
+  const deleteAssessment = trpc.admin.deleteAssessment.useMutation({ onSuccess: () => { toast.success("تم حذف الاختبار ونتائجه."); refresh(); }, onError: error => toast.error(error.message) });
+  const [pendingDelete, setPendingDelete] = useState<{ kind: "path" | "lesson" | "assessment"; id: number } | null>(null);
+  const isPending = (kind: "path" | "lesson" | "assessment", id: number) => pendingDelete?.kind === kind && pendingDelete.id === id;
+  const settleDelete = { onSettled: () => setPendingDelete(null) };
 
   useEffect(() => {
     if (user && user.role !== "admin") setLocation("/student");
@@ -71,14 +78,14 @@ export default function AdminDashboard() {
               <AdminMetric label="النتائج المنشورة" value={String(data.results.length)} icon={ClipboardCheck} tone="rose" />
             </section>
 
-            <section className="admin-main-grid">
+            <section className="admin-main-grid" id="admin-paths">
               <div className="panel content-panel">
                 <div className="panel-heading"><div><span>مكتبة الأكاديمية</span><h2>المسارات التعليمية</h2></div><CreatePathDialog onDone={refresh} /></div>
                 {data.paths.length ? <div className="admin-list">{data.paths.map(path => (
                   <article className="admin-item" key={path.id}>
                     <div className="admin-item-icon"><GraduationCap /></div>
                     <div className="min-w-0"><div className="admin-item-title"><h3>{path.title}</h3><Badge variant={path.isPublished ? "default" : "secondary"}>{path.isPublished ? "منشور" : "مسودة"}</Badge></div><p>{path.level} · {path.estimatedHours} ساعة · {data.lessons.filter(lesson => lesson.pathId === path.id).length} عنصر محتوى</p></div>
-                    <Button variant="outline" size="sm" onClick={() => publishPath.mutate({ pathId: path.id, isPublished: !path.isPublished })}>{path.isPublished ? "إخفاء" : "نشر"}</Button>
+                    <div className="row-actions"><Button variant="outline" size="sm" onClick={() => publishPath.mutate({ pathId: path.id, isPublished: !path.isPublished })}>{path.isPublished ? "إخفاء" : "نشر"}</Button><DeleteButton title="حذف المسار" description={`سيتم حذف «${path.title}» نهائياً مع كل دروسه وفيديوهاته واختباره وسجلات تقدم الطالبات فيه. لا يمكن التراجع عن هذا الإجراء.`} pending={isPending("path", path.id)} onConfirm={() => deletePath.mutate({ pathId: path.id }, settleDelete)} /></div>
                   </article>
                 ))}</div> : <AdminEmpty icon={GraduationCap} title="ابدئي بإضافة أول مسار" text="أنشئي مساراً ثم أضيفي إليه الدروس والفيديوهات والاختبارات." />}
               </div>
@@ -93,12 +100,12 @@ export default function AdminDashboard() {
               </div>
             </section>
 
-            <section className="admin-main-grid bottom-grid">
+            <section className="admin-main-grid bottom-grid" id="admin-assessments">
               <div className="panel results-panel">
                 <div className="panel-heading"><div><span>متابعة الأداء</span><h2>نتائج الاختبارات</h2></div><CreateResultDialog students={data.students} assessments={data.assessments} onDone={refresh} /></div>
                 {data.results.length ? <div className="score-list">{data.results.slice(0, 5).map(({ result, assessment, student }) => <div className="score-row" key={result.id}><div className="score-icon"><ClipboardCheck /></div><div><b>{student.name || "طالبة"} — {assessment.title}</b><p>{result.feedback || "نتيجة منشورة"}</p></div><strong>{result.score}<small>/{assessment.maxScore}</small></strong></div>)}</div> : <AdminEmpty icon={ClipboardCheck} title="لا توجد نتائج منشورة" text="أضيفي روابط الاختبارات، ثم انشري درجات الطالبات عند التصحيح." />}
               </div>
-              <div className="panel students-panel">
+              <div className="panel students-panel" id="admin-students">
                 <div className="panel-heading"><div><span>متابعة مباشرة</span><h2>الطالبات</h2></div></div>
                 {data.students.length ? <div className="student-list">{data.students.slice(0, 5).map(student => <div key={student.id} className="student-mini"><span>{student.name?.[0] ?? "ط"}</span><div><b>{student.name || "طالبة الأكاديمية"}</b><p>{student.currentLevel} · {student.progress}% إنجاز · {student.averageScore === null ? "لا درجات" : `${student.averageScore}% متوسط`}</p><Progress value={student.progress} /></div><CreateReportDialog student={student} onDone={refresh} /></div>)}</div> : <AdminEmpty icon={Users} title="ستظهر الطالبات هنا بعد التسجيل" text="يمكنكِ متابعة تقدمهن ونتائجهن فور انضمامهن للمسارات." />}
               </div>
@@ -106,17 +113,17 @@ export default function AdminDashboard() {
 
             <section className="panel lesson-library">
               <div className="panel-heading"><div><span>محتوى الدروس</span><h2>الدروس المضافة</h2></div><CreateLessonDialog paths={data.paths} onDone={refresh} /></div>
-              {data.lessons.filter(lesson => lesson.lessonType !== "video").length ? <div className="lesson-admin-table">{data.lessons.filter(lesson => lesson.lessonType !== "video").slice(0, 8).map(lesson => <div className="lesson-admin-row" key={lesson.id}><FileText /><div><b>{lesson.title}</b><p>{data.paths.find(path => path.id === lesson.pathId)?.title ?? "مسار غير محدد"} · {lesson.durationMinutes} دقيقة</p>{lesson.attachmentUrl && <a className="file-open-link" href={lesson.attachmentUrl} target="_blank" rel="noreferrer"><FileText className="size-3" /> فتح PDF</a>}</div><Badge variant={lesson.isPublished ? "default" : "secondary"}>{lesson.isPublished ? "منشور" : "مسودة"}</Badge><Button variant="outline" size="sm" onClick={() => publishLesson.mutate({ lessonId: lesson.id, isPublished: !lesson.isPublished })}>{lesson.isPublished ? "إخفاء" : "نشر"}</Button></div>)}</div> : <AdminEmpty icon={FilePlus2} title="مكتبة الدروس فارغة" text="أضيفي درساً وارفعِي ملف PDF من جهازك لربطه بالمسار." />}
+              {data.lessons.filter(lesson => lesson.lessonType !== "video").length ? <div className="lesson-admin-table">{data.lessons.filter(lesson => lesson.lessonType !== "video").slice(0, 8).map(lesson => <div className="lesson-admin-row" key={lesson.id}><FileText /><div><b>{lesson.title}</b><p>{data.paths.find(path => path.id === lesson.pathId)?.title ?? "مسار غير محدد"} · {lesson.durationMinutes} دقيقة</p>{lesson.attachmentUrl && <a className="file-open-link" href={lesson.attachmentUrl} target="_blank" rel="noreferrer"><FileText className="size-3" /> فتح PDF</a>}</div><Badge variant={lesson.isPublished ? "default" : "secondary"}>{lesson.isPublished ? "منشور" : "مسودة"}</Badge><Button variant="outline" size="sm" onClick={() => publishLesson.mutate({ lessonId: lesson.id, isPublished: !lesson.isPublished })}>{lesson.isPublished ? "إخفاء" : "نشر"}</Button><DeleteButton title="حذف الدرس" description={`سيتم حذف الدرس «${lesson.title}» نهائياً مع ملفاته (إن وجدت) وسجلات إتمام الطالبات له. لا يمكن التراجع عن هذا الإجراء.`} pending={isPending("lesson", lesson.id)} onConfirm={() => deleteLesson.mutate({ lessonId: lesson.id }, settleDelete)} /></div>)}</div> : <AdminEmpty icon={FilePlus2} title="مكتبة الدروس فارغة" text="أضيفي درساً وارفعِي ملف PDF من جهازك لربطه بالمسار." />}
             </section>
 
             <section className="panel video-library">
               <div className="panel-heading"><div><span>محتوى مرئي</span><h2>الفيديوهات المضافة</h2></div><CreateVideoDialog paths={data.paths} onDone={refresh} /></div>
-              {data.lessons.filter(lesson => lesson.lessonType === "video").length ? <div className="lesson-admin-table">{data.lessons.filter(lesson => lesson.lessonType === "video").slice(0, 8).map(video => <div className="lesson-admin-row video-admin-row" key={video.id}><PlayCircle /><div><b>{video.title}</b><p>{data.paths.find(path => path.id === video.pathId)?.title ?? "مسار غير محدد"} · {video.durationMinutes} دقيقة · {video.sourceUrl && video.sourceUrl.startsWith("http") ? "رابط فيديو خارجي" : "ملف مرفوع من الجهاز"}</p>{video.sourceUrl && <a className="file-open-link" href={video.sourceUrl} target="_blank" rel="noreferrer"><PlayCircle className="size-3" /> تشغيل الفيديو</a>}</div><Badge variant={video.isPublished ? "default" : "secondary"}>{video.isPublished ? "منشور" : "مسودة"}</Badge><Button variant="outline" size="sm" onClick={() => publishLesson.mutate({ lessonId: video.id, isPublished: !video.isPublished })}>{video.isPublished ? "إخفاء" : "نشر"}</Button></div>)}</div> : <AdminEmpty icon={PlayCircle} title="لا توجد فيديوهات مضافة" text="ارفعي ملف فيديو من جهازك أو أضيفي رابط يوتيوب، ثم انشريه ليظهر للطالبات." />}
+              {data.lessons.filter(lesson => lesson.lessonType === "video").length ? <div className="lesson-admin-table">{data.lessons.filter(lesson => lesson.lessonType === "video").slice(0, 8).map(video => <div className="lesson-admin-row video-admin-row" key={video.id}><PlayCircle /><div><b>{video.title}</b><p>{data.paths.find(path => path.id === video.pathId)?.title ?? "مسار غير محدد"} · {video.durationMinutes} دقيقة · {video.sourceUrl && video.sourceUrl.startsWith("http") ? "رابط فيديو خارجي" : "ملف مرفوع من الجهاز"}</p>{video.sourceUrl && <a className="file-open-link" href={video.sourceUrl} target="_blank" rel="noreferrer"><PlayCircle className="size-3" /> تشغيل الفيديو</a>}</div><Badge variant={video.isPublished ? "default" : "secondary"}>{video.isPublished ? "منشور" : "مسودة"}</Badge><Button variant="outline" size="sm" onClick={() => publishLesson.mutate({ lessonId: video.id, isPublished: !video.isPublished })}>{video.isPublished ? "إخفاء" : "نشر"}</Button><DeleteButton title="حذف الفيديو" description={`سيتم حذف الفيديو «${video.title}» نهائياً مع ملفه (إن كان مرفوعاً من الجهاز) وسجلات مشاهدته. لا يمكن التراجع عن هذا الإجراء.`} pending={isPending("lesson", video.id)} onConfirm={() => deleteLesson.mutate({ lessonId: video.id }, settleDelete)} /></div>)}</div> : <AdminEmpty icon={PlayCircle} title="لا توجد فيديوهات مضافة" text="ارفعي ملف فيديو من جهازك أو أضيفي رابط يوتيوب، ثم انشريه ليظهر للطالبات." />}
             </section>
 
             <section className="panel assessment-library">
               <div className="panel-heading"><div><span>روابط الاختبارات</span><h2>الاختبارات المضافة</h2></div><CreateAssessmentDialog paths={data.paths} onDone={refresh} /></div>
-              {data.assessments.length ? <div className="lesson-admin-table">{data.assessments.slice(0, 8).map(assessment => <div className="lesson-admin-row" key={assessment.id}><Link2 /><div><b>{assessment.title}</b><p>{data.paths.find(path => path.id === assessment.pathId)?.title ?? "مسار غير محدد"} · الدرجة الكلية {assessment.maxScore}</p></div><Badge variant={assessment.isPublished ? "default" : "secondary"}>{assessment.isPublished ? "منشور" : "مسودة"}</Badge><Button variant="outline" size="sm" onClick={() => publishAssessment.mutate({ assessmentId: assessment.id, isPublished: !assessment.isPublished })}>{assessment.isPublished ? "إخفاء" : "نشر"}</Button></div>)}</div> : <AdminEmpty icon={Link2} title="لم تتم إضافة اختبارات" text="أضيفي رابط اختبار واربطِيه بالمسار، ثم انشريه للطالبات." />}
+              {data.assessments.length ? <div className="lesson-admin-table">{data.assessments.slice(0, 8).map(assessment => <div className="lesson-admin-row" key={assessment.id}><Link2 /><div><b>{assessment.title}</b><p>{data.paths.find(path => path.id === assessment.pathId)?.title ?? "مسار غير محدد"} · الدرجة الكلية {assessment.maxScore}</p></div><Badge variant={assessment.isPublished ? "default" : "secondary"}>{assessment.isPublished ? "منشور" : "مسودة"}</Badge><Button variant="outline" size="sm" onClick={() => publishAssessment.mutate({ assessmentId: assessment.id, isPublished: !assessment.isPublished })}>{assessment.isPublished ? "إخفاء" : "نشر"}</Button><DeleteButton title="حذف الاختبار" description={`سيتم حذف الاختبار «${assessment.title}» نهائياً مع كل النتائج المرتبطة به. لا يمكن التراجع عن هذا الإجراء.`} pending={isPending("assessment", assessment.id)} onConfirm={() => deleteAssessment.mutate({ assessmentId: assessment.id }, settleDelete)} /></div>)}</div> : <AdminEmpty icon={Link2} title="لم تتم إضافة اختبارات" text="أضيفي رابط اختبار واربطِيه بالمسار، ثم انشريه للطالبات." />}
             </section>
           </>
         ) : <div className="panel"><AdminEmpty icon={BarChart3} title="تعذر تحميل لوحة الإدارة" text="يرجى إعادة المحاولة بعد التحقق من الاتصال." /></div>}
@@ -277,6 +284,29 @@ function CreateReportDialog({ student, onDone }: { student: StudentChoice; onDon
   const [form, setForm] = useState({ title: "تقرير التقدم", summary: "", currentLevel: "مبتدئ" as "مبتدئ" | "متوسط" | "متقدم", overallProgress: 0 });
   const publish = trpc.admin.publishReport.useMutation({ onSuccess: () => { toast.success("نُشر التقرير وأُضيف إشعار للطالب."); setOpen(false); onDone(); }, onError: error => toast.error(error.message) });
   return <Dialog open={open} onOpenChange={setOpen}><DialogTrigger asChild><Button variant="ghost" size="sm"><Send className="size-4" /> تقرير</Button></DialogTrigger><DialogContent dir="rtl"><DialogHeader><DialogTitle>تقرير تقدم {student.name || "الطالبة"}</DialogTitle><DialogDescription>يُعرض التقرير للطالب في لوحته فور نشره.</DialogDescription></DialogHeader><form className="form-stack" onSubmit={e => { e.preventDefault(); publish.mutate({ ...form, studentId: student.id, skills: [] }); }}><Field label="عنوان التقرير"><Input required value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} /></Field><Field label="ملاحظات المعلمة"><Textarea required value={form.summary} onChange={e => setForm({ ...form, summary: e.target.value })} /></Field><div className="form-row"><Field label="المستوى"><Select value={form.currentLevel} onValueChange={(currentLevel: "مبتدئ" | "متوسط" | "متقدم") => setForm({ ...form, currentLevel })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="مبتدئ">مبتدئ</SelectItem><SelectItem value="متوسط">متوسط</SelectItem><SelectItem value="متقدم">متقدم</SelectItem></SelectContent></Select></Field><Field label="نسبة الإنجاز"><Input type="number" min="0" max="100" value={form.overallProgress} onChange={e => setForm({ ...form, overallProgress: Number(e.target.value) })} /></Field></div><Button className="academy-button" type="submit" disabled={publish.isPending}>{publish.isPending ? "يتم النشر..." : "نشر التقرير وإشعار الطالبة"}</Button></form></DialogContent></Dialog>;
+}
+
+function DeleteButton({ title, description, pending, onConfirm }: { title: string; description: string; pending: boolean; onConfirm: () => void }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <AlertDialog open={open} onOpenChange={setOpen}>
+      <AlertDialogTrigger asChild>
+        <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive" aria-label={title}>
+          <Trash2 className="size-4" />
+        </Button>
+      </AlertDialogTrigger>
+      <AlertDialogContent dir="rtl">
+        <AlertDialogHeader>
+          <AlertDialogTitle>{title}</AlertDialogTitle>
+          <AlertDialogDescription>{description}</AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>إلغاء</AlertDialogCancel>
+          <AlertDialogAction disabled={pending} onClick={() => onConfirm()}>{pending ? "جارٍ الحذف..." : "نعم، احذفي"}</AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  );
 }
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {

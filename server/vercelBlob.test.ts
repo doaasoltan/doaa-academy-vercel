@@ -3,12 +3,14 @@ import type { AddressInfo } from "node:net";
 import express from "express";
 
 const blobMocks = vi.hoisted(() => ({
+  del: vi.fn(),
   issueSignedToken: vi.fn(),
   presignUrl: vi.fn(),
   handleUploadPresigned: vi.fn(),
 }));
 
 vi.mock("@vercel/blob", () => ({
+  del: blobMocks.del,
   issueSignedToken: blobMocks.issueSignedToken,
   presignUrl: blobMocks.presignUrl,
 }));

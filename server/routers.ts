@@ -3,6 +3,7 @@ import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import * as db from "./db.js";
 import { getSessionCookieOptions } from "./_core/cookies.js";
+import { deleteBlobByUrl } from "./_core/vercelBlob.js";
 import { systemRouter } from "./_core/systemRouter.js";
 import { adminProcedure, protectedProcedure, publicProcedure, router } from "./_core/trpc.js";
 import { finalizeChunkedUpload, MAX_UPLOAD_CHUNKS, storeUploadChunk } from "./chunkedUpload.js";
@@ -69,6 +70,24 @@ export const appRouter = router({
       position: z.number().int().min(1).max(1000),
     })).mutation(({ input }) => db.createAssessment(input)),
     publishAssessment: adminProcedure.input(z.object({ assessmentId: z.number().int().positive(), isPublished: z.boolean() })).mutation(({ input }) => db.setAssessmentPublished(input.assessmentId, input.isPublished)),
+    deleteLesson: adminProcedure.input(z.object({ lessonId: z.number().int().positive() })).mutation(async ({ input }) => {
+      const lesson = await db.getLessonById(input.lessonId);
+      if (!lesson) throw new TRPCError({ code: "NOT_FOUND", message: "المحتوى غير موجود حالياً." });
+      await db.deleteLessonById(input.lessonId);
+      await deleteBlobByUrl(lesson.sourceUrl);
+      await deleteBlobByUrl(lesson.attachmentUrl);
+    }),
+    deleteAssessment: adminProcedure.input(z.object({ assessmentId: z.number().int().positive() })).mutation(async ({ input }) => {
+      await db.deleteAssessmentById(input.assessmentId);
+    }),
+    deletePath: adminProcedure.input(z.object({ pathId: z.number().int().positive() })).mutation(async ({ input }) => {
+      const lessons = await db.getLessonsByPath(input.pathId, false);
+      await db.deleteLearningPath(input.pathId);
+      for (const lesson of lessons) {
+        await deleteBlobByUrl(lesson.sourceUrl);
+        await deleteBlobByUrl(lesson.attachmentUrl);
+      }
+    }),
     releaseResult: adminProcedure.input(z.object({
       assessmentId: z.number().int().positive(),
       studentId: z.number().int().positive(),

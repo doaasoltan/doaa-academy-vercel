@@ -1,5 +1,5 @@
 import type { Express, Request, Response } from "express";
-import { issueSignedToken, presignUrl } from "@vercel/blob";
+import { del, issueSignedToken, presignUrl } from "@vercel/blob";
 import { handleUploadPresigned } from "@vercel/blob/client";
 import { sdk } from "./sdk.js";
 import {
@@ -37,6 +37,49 @@ export function warnIfBlobNotConfigured(): void {
       "[VercelBlob] تحذير: لا توجد بيانات اعتماد Vercel Blob — رفع الملفات وقراءة الملفات الخاصة لن يعمل. " +
         "اربطي Blob Store بالمشروع واضبطي BLOB_READ_WRITE_TOKEN (أو BLOB_STORE_ID) في Environment Variables ثم أعيدي النشر. " +
         "(No blob credentials found: set BLOB_READ_WRITE_TOKEN or BLOB_STORE_ID in the project environment variables.)",
+    );
+  }
+}
+
+/**
+ * Best-effort deletion of the Blob object behind a lesson/video URL, used
+ * when an admin deletes content so the 1GB free storage is reclaimed.
+ * Only private Vercel Blob files under `academy/` are touched; external
+ * links (YouTube, Drive…) are ignored. Failures are logged, never thrown —
+ * the database row is already gone by the time this runs.
+ */
+export async function deleteBlobByUrl(urlValue: string | null | undefined): Promise<void> {
+  if (!urlValue) return;
+
+  let pathname: string | null = null;
+  if (urlValue.startsWith("/api/blob-file?")) {
+    try {
+      pathname = new URL(`http://localhost${urlValue}`).searchParams.get("pathname");
+    } catch {
+      return;
+    }
+  } else {
+    try {
+      const url = new URL(urlValue);
+      if (url.hostname.endsWith(".private.blob.vercel-storage.com")) {
+        pathname = url.pathname.replace(/^\/+/, "");
+      }
+    } catch {
+      return; // Not an absolute URL — nothing to delete.
+    }
+  }
+
+  if (!pathname || !isAllowedBlobPath(pathname)) return;
+  if (!hasBlobCredentials()) return;
+
+  try {
+    await del(pathname);
+    console.log("[VercelBlob] Deleted blob object", pathname);
+  } catch (error) {
+    console.warn(
+      "[VercelBlob] Could not delete blob object (file may already be gone)",
+      pathname,
+      error instanceof Error ? error.message : error,
     );
   }
 }

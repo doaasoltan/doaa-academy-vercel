@@ -1,4 +1,4 @@
-import { and, desc, eq, isNotNull } from "drizzle-orm";
+import { and, desc, eq, inArray, isNotNull } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import {
   assessmentResults,
@@ -211,6 +211,56 @@ export async function setAssessmentPublished(assessmentId: number, isPublished: 
   const db = await getDb();
   if (!db) throw new Error("قاعدة البيانات غير متاحة حالياً");
   await db.update(assessments).set({ isPublished }).where(eq(assessments.id, assessmentId));
+}
+
+export async function getLessonById(lessonId: number) {
+  if (isDemoMode()) {
+    const found = await demoStore.getLessonById(lessonId);
+    if (!found) return null;
+    return { ...found, sourceUrl: toProtectedBlobUrl(found.sourceUrl), attachmentUrl: toProtectedBlobUrl(found.attachmentUrl) };
+  }
+  const db = await getDb();
+  if (!db) return null;
+  const rows = await db.select().from(lessons).where(eq(lessons.id, lessonId));
+  const lesson = rows[0];
+  if (!lesson) return null;
+  return { ...lesson, sourceUrl: toProtectedBlobUrl(lesson.sourceUrl), attachmentUrl: toProtectedBlobUrl(lesson.attachmentUrl) };
+}
+
+export async function deleteLessonById(lessonId: number) {
+  if (isDemoMode()) return demoStore.deleteLessonById(lessonId);
+  const db = await getDb();
+  if (!db) throw new Error("قاعدة البيانات غير متاحة حالياً");
+  await db.delete(lessonProgress).where(eq(lessonProgress.lessonId, lessonId));
+  await db.delete(lessons).where(eq(lessons.id, lessonId));
+}
+
+export async function deleteAssessmentById(assessmentId: number) {
+  if (isDemoMode()) return demoStore.deleteAssessmentById(assessmentId);
+  const db = await getDb();
+  if (!db) throw new Error("قاعدة البيانات غير متاحة حالياً");
+  await db.delete(assessmentResults).where(eq(assessmentResults.assessmentId, assessmentId));
+  await db.delete(assessments).where(eq(assessments.id, assessmentId));
+}
+
+export async function deleteLearningPath(pathId: number) {
+  if (isDemoMode()) return demoStore.deleteLearningPath(pathId);
+  const db = await getDb();
+  if (!db) throw new Error("قاعدة البيانات غير متاحة حالياً");
+  const lessonRows = await db.select().from(lessons).where(eq(lessons.pathId, pathId));
+  const assessmentRows = await db.select().from(assessments).where(eq(assessments.pathId, pathId));
+  const lessonIds = lessonRows.map(item => item.id);
+  const assessmentIds = assessmentRows.map(item => item.id);
+  if (lessonIds.length) {
+    await db.delete(lessonProgress).where(inArray(lessonProgress.lessonId, lessonIds));
+    await db.delete(lessons).where(inArray(lessons.id, lessonIds));
+  }
+  if (assessmentIds.length) {
+    await db.delete(assessmentResults).where(inArray(assessmentResults.assessmentId, assessmentIds));
+    await db.delete(assessments).where(inArray(assessments.id, assessmentIds));
+  }
+  await db.delete(enrollments).where(eq(enrollments.pathId, pathId));
+  await db.delete(learningPaths).where(eq(learningPaths.id, pathId));
 }
 
 export async function getAssessmentsByPath(pathId: number, publishedOnly = true) {

@@ -471,6 +471,37 @@ async function setAssessmentPublished(assessmentId: number, isPublished: boolean
   }
 }
 
+async function getLessonById(lessonId: number) {
+  return getState().lessons.find(item => item.id === lessonId) ?? null;
+}
+
+async function deleteLessonById(lessonId: number) {
+  const store = getState();
+  store.lessons = store.lessons.filter(item => item.id !== lessonId);
+  store.lessonProgress = store.lessonProgress.filter(item => item.lessonId !== lessonId);
+  persist();
+}
+
+async function deleteAssessmentById(assessmentId: number) {
+  const store = getState();
+  store.assessments = store.assessments.filter(item => item.id !== assessmentId);
+  store.assessmentResults = store.assessmentResults.filter(item => item.assessmentId !== assessmentId);
+  persist();
+}
+
+async function deleteLearningPath(pathId: number) {
+  const store = getState();
+  const lessonIds = new Set(store.lessons.filter(item => item.pathId === pathId).map(item => item.id));
+  const assessmentIds = new Set(store.assessments.filter(item => item.pathId === pathId).map(item => item.id));
+  store.lessons = store.lessons.filter(item => item.pathId !== pathId);
+  store.assessments = store.assessments.filter(item => item.pathId !== pathId);
+  store.enrollments = store.enrollments.filter(item => item.pathId !== pathId);
+  store.lessonProgress = store.lessonProgress.filter(item => !lessonIds.has(item.lessonId));
+  store.assessmentResults = store.assessmentResults.filter(item => !assessmentIds.has(item.assessmentId));
+  store.learningPaths = store.learningPaths.filter(item => item.id !== pathId);
+  persist();
+}
+
 async function getAssessmentsByPath(pathId: number, publishedOnly = true) {
   const rows = getState()
     .assessments.filter(item => item.pathId === pathId)
@@ -674,8 +705,12 @@ export const demoStore = {
   getLessonsByPath,
   createLesson,
   setLessonPublished,
+  getLessonById,
+  deleteLessonById,
   createAssessment,
   setAssessmentPublished,
+  deleteAssessmentById,
+  deleteLearningPath,
   getAssessmentsByPath,
   enrollStudent,
   completeLesson,

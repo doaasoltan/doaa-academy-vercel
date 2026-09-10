@@ -8,21 +8,37 @@ import { useIsMobile } from "@/hooks/useMobile";
 import { Code2, LogOut, PanelRightOpen } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useLocation } from "wouter";
+import { useState } from "react";
 import { DashboardLayoutSkeleton } from "./DashboardLayoutSkeleton";
 
-export type AcademyMenuItem = { icon: LucideIcon; label: string; path: string };
+export type AcademyMenuItem = { icon: LucideIcon; label: string; path: string; anchor?: string };
 
 export default function DashboardLayout({ children, menuItems, title }: { children: React.ReactNode; menuItems: AcademyMenuItem[]; title: string }) {
   const { loading, user, logout } = useAuth();
   const [location, setLocation] = useLocation();
   const isMobile = useIsMobile();
+  const [activeAnchor, setActiveAnchor] = useState<string | null>(null);
 
   if (loading) return <DashboardLayoutSkeleton />;
   if (!user) {
     return <div className="auth-gate"><div className="auth-gate-card"><BrandMark /><h1>رحلتك البرمجية تبدأ من هنا</h1><p>سجّلي الدخول للوصول إلى مسارك التعليمي ولوحة متابعتك.</p><Button className="academy-button" onClick={() => startLogin(location)}>تسجيل الدخول</Button></div></div>;
   }
 
-  const active = menuItems.find(item => item.path === location)?.label ?? title;
+  const goTo = (item: AcademyMenuItem) => {
+    if (!item.anchor) {
+      setLocation(item.path);
+      return;
+    }
+    if (item.anchor === "top") {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    } else {
+      document.getElementById(item.anchor)?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+    setActiveAnchor(item.anchor);
+  };
+
+  const isActive = (item: AcademyMenuItem) => (item.anchor ? activeAnchor === item.anchor : item.path === location);
+  const active = menuItems.find(isActive)?.label ?? title;
   return <SidebarProvider className="academy-shell" dir="rtl">
     <Sidebar side="right" collapsible="icon" className="academy-sidebar border-l border-white/10">
       <SidebarHeader className="h-24 p-4"><BrandMark compact /></SidebarHeader>
@@ -30,7 +46,7 @@ export default function DashboardLayout({ children, menuItems, title }: { childr
         <p className="sidebar-kicker px-2 pb-3 group-data-[collapsible=icon]:hidden">{title}</p>
         <SidebarMenu className="gap-2">
           {menuItems.map(item => <SidebarMenuItem key={item.label}>
-            <SidebarMenuButton isActive={location === item.path} onClick={() => setLocation(item.path)} tooltip={item.label} className="academy-menu-item h-12">
+            <SidebarMenuButton isActive={isActive(item)} onClick={() => goTo(item)} tooltip={item.label} className="academy-menu-item h-12">
               <item.icon className="size-5" /><span>{item.label}</span>
             </SidebarMenuButton>
           </SidebarMenuItem>)}
