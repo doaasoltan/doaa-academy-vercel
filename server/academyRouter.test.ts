@@ -4,6 +4,10 @@ import type { TrpcContext } from "./_core/context.js";
 const dbMocks = vi.hoisted(() => ({
   getStudentDashboard: vi.fn(),
   createLesson: vi.fn(),
+  updateLesson: vi.fn(),
+  deleteLesson: vi.fn(),
+  updateAssessment: vi.fn(),
+  deleteAssessment: vi.fn(),
   releaseAssessmentResult: vi.fn(),
   publishStudentReport: vi.fn(),
 }));
@@ -77,6 +81,42 @@ describe("academy router permissions and publication workflows", () => {
     const caller = appRouter.createCaller(context("admin"));
     await caller.admin.publishReport({ studentId: 22, title: "تقرير التقدم", summary: "تقدم جيد في أساسيات HTML.", currentLevel: "متوسط", overallProgress: 56, skills: [{ label: "HTML", value: 80 }] });
     expect(dbMocks.publishStudentReport).toHaveBeenCalledWith({ studentId: 22, authorId: 10, title: "تقرير التقدم", summary: "تقدم جيد في أساسيات HTML.", currentLevel: "متوسط", overallProgress: 56, skills: [{ label: "HTML", value: 80 }] });
+  });
+
+  it("allows the admin to update a lesson without recreating it", async () => {
+    dbMocks.updateLesson.mockResolvedValue(undefined);
+    const caller = appRouter.createCaller(context("admin"));
+    await caller.admin.updateLesson({ lessonId: 9, title: "مدخل محدث إلى HTML", durationMinutes: 25 });
+    expect(dbMocks.updateLesson).toHaveBeenCalledWith(9, { title: "مدخل محدث إلى HTML", durationMinutes: 25 });
+  });
+
+  it("prevents a student from updating or deleting lessons", async () => {
+    const caller = appRouter.createCaller(context("user"));
+    await expect(caller.admin.updateLesson({ lessonId: 9, title: "محاولة تعديل" })).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(caller.admin.deleteLesson({ lessonId: 9 })).rejects.toMatchObject({ code: "FORBIDDEN" });
+  });
+
+  it("allows the admin to delete a lesson", async () => {
+    dbMocks.deleteLesson.mockResolvedValue(undefined);
+    const caller = appRouter.createCaller(context("admin"));
+    await caller.admin.deleteLesson({ lessonId: 9 });
+    expect(dbMocks.deleteLesson).toHaveBeenCalledWith(9);
+  });
+
+  it("allows the admin to update and delete an assessment", async () => {
+    dbMocks.updateAssessment.mockResolvedValue(undefined);
+    dbMocks.deleteAssessment.mockResolvedValue(undefined);
+    const caller = appRouter.createCaller(context("admin"));
+    await caller.admin.updateAssessment({ assessmentId: 4, title: "اختبار محدث", maxScore: 50 });
+    expect(dbMocks.updateAssessment).toHaveBeenCalledWith(4, { title: "اختبار محدث", maxScore: 50 });
+    await caller.admin.deleteAssessment({ assessmentId: 4 });
+    expect(dbMocks.deleteAssessment).toHaveBeenCalledWith(4);
+  });
+
+  it("prevents a student from updating or deleting assessments", async () => {
+    const caller = appRouter.createCaller(context("user"));
+    await expect(caller.admin.updateAssessment({ assessmentId: 4, title: "محاولة تعديل" })).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(caller.admin.deleteAssessment({ assessmentId: 4 })).rejects.toMatchObject({ code: "FORBIDDEN" });
   });
 
   it("uses clear in-platform notifications for both result and report publishing", () => {

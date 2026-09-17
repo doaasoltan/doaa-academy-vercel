@@ -436,6 +436,41 @@ async function setLessonPublished(lessonId: number, isPublished: boolean) {
   }
 }
 
+async function updateLesson(lessonId: number, input: {
+  pathId?: number;
+  title?: string;
+  summary?: string | null;
+  content?: string | null;
+  lessonType?: "video" | "article" | "workshop" | "resource";
+  sourceUrl?: string | null;
+  attachmentUrl?: string | null;
+  attachmentName?: string | null;
+  durationMinutes?: number;
+  position?: number;
+}) {
+  const found = getState().lessons.find(item => item.id === lessonId);
+  if (!found) return;
+  if (input.pathId !== undefined) found.pathId = input.pathId;
+  if (input.title !== undefined) found.title = input.title;
+  if (input.summary !== undefined) found.summary = input.summary || null;
+  if (input.content !== undefined) found.content = input.content || null;
+  if (input.lessonType !== undefined) found.lessonType = input.lessonType;
+  if (input.sourceUrl !== undefined) found.sourceUrl = input.sourceUrl || null;
+  if (input.attachmentUrl !== undefined) found.attachmentUrl = input.attachmentUrl || null;
+  if (input.attachmentName !== undefined) found.attachmentName = input.attachmentName || null;
+  if (input.durationMinutes !== undefined) found.durationMinutes = input.durationMinutes;
+  if (input.position !== undefined) found.position = input.position;
+  found.updatedAt = new Date();
+  persist();
+}
+
+async function deleteLesson(lessonId: number) {
+  const store = getState();
+  store.lessonProgress = store.lessonProgress.filter(item => item.lessonId !== lessonId);
+  store.lessons = store.lessons.filter(item => item.id !== lessonId);
+  persist();
+}
+
 async function createAssessment(input: {
   pathId: number;
   title: string;
@@ -469,6 +504,33 @@ async function setAssessmentPublished(assessmentId: number, isPublished: boolean
     found.updatedAt = new Date();
     persist();
   }
+}
+
+async function updateAssessment(assessmentId: number, input: {
+  pathId?: number;
+  title?: string;
+  description?: string | null;
+  externalUrl?: string;
+  maxScore?: number;
+  position?: number;
+}) {
+  const found = getState().assessments.find(item => item.id === assessmentId);
+  if (!found) return;
+  if (input.pathId !== undefined) found.pathId = input.pathId;
+  if (input.title !== undefined) found.title = input.title;
+  if (input.description !== undefined) found.description = input.description || null;
+  if (input.externalUrl !== undefined) found.externalUrl = input.externalUrl;
+  if (input.maxScore !== undefined) found.maxScore = input.maxScore;
+  if (input.position !== undefined) found.position = input.position;
+  found.updatedAt = new Date();
+  persist();
+}
+
+async function deleteAssessment(assessmentId: number) {
+  const store = getState();
+  store.assessmentResults = store.assessmentResults.filter(item => item.assessmentId !== assessmentId);
+  store.assessments = store.assessments.filter(item => item.id !== assessmentId);
+  persist();
 }
 
 async function getAssessmentsByPath(pathId: number, publishedOnly = true) {
@@ -674,8 +736,12 @@ export const demoStore = {
   getLessonsByPath,
   createLesson,
   setLessonPublished,
+  updateLesson,
+  deleteLesson,
   createAssessment,
   setAssessmentPublished,
+  updateAssessment,
+  deleteAssessment,
   getAssessmentsByPath,
   enrollStudent,
   completeLesson,

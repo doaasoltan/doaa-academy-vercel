@@ -60,6 +60,11 @@ export const appRouter = router({
     publishPath: adminProcedure.input(z.object({ pathId: z.number().int().positive(), isPublished: z.boolean() })).mutation(({ input }) => db.setPathPublished(input.pathId, input.isPublished)),
     createLesson: adminProcedure.input(lessonInput).mutation(({ input }) => db.createLesson({ ...input, sourceUrl: input.sourceUrl || undefined })),
     publishLesson: adminProcedure.input(z.object({ lessonId: z.number().int().positive(), isPublished: z.boolean() })).mutation(({ input }) => db.setLessonPublished(input.lessonId, input.isPublished)),
+    updateLesson: adminProcedure.input(lessonInput.partial().extend({ lessonId: z.number().int().positive() })).mutation(({ input }) => {
+      const { lessonId, ...patch } = input;
+      return db.updateLesson(lessonId, patch);
+    }),
+    deleteLesson: adminProcedure.input(z.object({ lessonId: z.number().int().positive() })).mutation(({ input }) => db.deleteLesson(input.lessonId)),
     createAssessment: adminProcedure.input(z.object({
       pathId: z.number().int().positive(),
       title: z.string().min(3).max(220),
@@ -69,6 +74,19 @@ export const appRouter = router({
       position: z.number().int().min(1).max(1000),
     })).mutation(({ input }) => db.createAssessment(input)),
     publishAssessment: adminProcedure.input(z.object({ assessmentId: z.number().int().positive(), isPublished: z.boolean() })).mutation(({ input }) => db.setAssessmentPublished(input.assessmentId, input.isPublished)),
+    updateAssessment: adminProcedure.input(z.object({
+      assessmentId: z.number().int().positive(),
+      pathId: z.number().int().positive().optional(),
+      title: z.string().min(3).max(220).optional(),
+      description: z.string().max(2000).nullable().optional(),
+      externalUrl: z.string().url().optional(),
+      maxScore: z.number().int().min(1).max(1000).optional(),
+      position: z.number().int().min(1).max(1000).optional(),
+    })).mutation(({ input }) => {
+      const { assessmentId, ...patch } = input;
+      return db.updateAssessment(assessmentId, patch);
+    }),
+    deleteAssessment: adminProcedure.input(z.object({ assessmentId: z.number().int().positive() })).mutation(({ input }) => db.deleteAssessment(input.assessmentId)),
     releaseResult: adminProcedure.input(z.object({
       assessmentId: z.number().int().positive(),
       studentId: z.number().int().positive(),

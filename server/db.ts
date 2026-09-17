@@ -191,6 +191,44 @@ export async function setLessonPublished(lessonId: number, isPublished: boolean)
   await db.update(lessons).set({ isPublished }).where(eq(lessons.id, lessonId));
 }
 
+export async function updateLesson(lessonId: number, input: {
+  pathId?: number;
+  title?: string;
+  summary?: string | null;
+  content?: string | null;
+  lessonType?: "video" | "article" | "workshop" | "resource";
+  sourceUrl?: string | null;
+  attachmentUrl?: string | null;
+  attachmentName?: string | null;
+  durationMinutes?: number;
+  position?: number;
+}) {
+  if (isDemoMode()) return demoStore.updateLesson(lessonId, input);
+  const db = await getDb();
+  if (!db) throw new Error("قاعدة البيانات غير متاحة حالياً");
+  const patch: Record<string, unknown> = {};
+  if (input.pathId !== undefined) patch.pathId = input.pathId;
+  if (input.title !== undefined) patch.title = input.title;
+  if (input.summary !== undefined) patch.summary = input.summary || null;
+  if (input.content !== undefined) patch.content = input.content || null;
+  if (input.lessonType !== undefined) patch.lessonType = input.lessonType;
+  if (input.sourceUrl !== undefined) patch.sourceUrl = input.sourceUrl || null;
+  if (input.attachmentUrl !== undefined) patch.attachmentUrl = input.attachmentUrl || null;
+  if (input.attachmentName !== undefined) patch.attachmentName = input.attachmentName || null;
+  if (input.durationMinutes !== undefined) patch.durationMinutes = input.durationMinutes;
+  if (input.position !== undefined) patch.position = input.position;
+  if (!Object.keys(patch).length) return;
+  await db.update(lessons).set(patch).where(eq(lessons.id, lessonId));
+}
+
+export async function deleteLesson(lessonId: number) {
+  if (isDemoMode()) return demoStore.deleteLesson(lessonId);
+  const db = await getDb();
+  if (!db) throw new Error("قاعدة البيانات غير متاحة حالياً");
+  await db.delete(lessonProgress).where(eq(lessonProgress.lessonId, lessonId));
+  await db.delete(lessons).where(eq(lessons.id, lessonId));
+}
+
 export async function createAssessment(input: {
   pathId: number;
   title: string;
@@ -211,6 +249,36 @@ export async function setAssessmentPublished(assessmentId: number, isPublished: 
   const db = await getDb();
   if (!db) throw new Error("قاعدة البيانات غير متاحة حالياً");
   await db.update(assessments).set({ isPublished }).where(eq(assessments.id, assessmentId));
+}
+
+export async function updateAssessment(assessmentId: number, input: {
+  pathId?: number;
+  title?: string;
+  description?: string | null;
+  externalUrl?: string;
+  maxScore?: number;
+  position?: number;
+}) {
+  if (isDemoMode()) return demoStore.updateAssessment(assessmentId, input);
+  const db = await getDb();
+  if (!db) throw new Error("قاعدة البيانات غير متاحة حالياً");
+  const patch: Record<string, unknown> = {};
+  if (input.pathId !== undefined) patch.pathId = input.pathId;
+  if (input.title !== undefined) patch.title = input.title;
+  if (input.description !== undefined) patch.description = input.description || null;
+  if (input.externalUrl !== undefined) patch.externalUrl = input.externalUrl;
+  if (input.maxScore !== undefined) patch.maxScore = input.maxScore;
+  if (input.position !== undefined) patch.position = input.position;
+  if (!Object.keys(patch).length) return;
+  await db.update(assessments).set(patch).where(eq(assessments.id, assessmentId));
+}
+
+export async function deleteAssessment(assessmentId: number) {
+  if (isDemoMode()) return demoStore.deleteAssessment(assessmentId);
+  const db = await getDb();
+  if (!db) throw new Error("قاعدة البيانات غير متاحة حالياً");
+  await db.delete(assessmentResults).where(eq(assessmentResults.assessmentId, assessmentId));
+  await db.delete(assessments).where(eq(assessments.id, assessmentId));
 }
 
 export async function getAssessmentsByPath(pathId: number, publishedOnly = true) {
