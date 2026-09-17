@@ -25,3 +25,9 @@ export function gradeLabel(score: number) {
   if (score >= 60) return "جيد";
   return "يحتاج مراجعة";
 }
+
+export function findNextLesson<T extends { id: number; position: number }>(lessons: T[], completedIds: Set<number> | number[]): T | null {
+  const done = completedIds instanceof Set ? completedIds : new Set(completedIds);
+  const ordered = [...lessons].sort((a, b) => a.position - b.position);
+  return ordered.find(lesson => !done.has(lesson.id)) ?? null;
+}

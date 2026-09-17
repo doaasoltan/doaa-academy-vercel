@@ -19,7 +19,7 @@ import type {
   StudentReport,
   User,
 } from "../drizzle/schema.js";
-import { calculateOverallProgress, calculateTrackProgress, levelFromProgress } from "./academyMetrics.js";
+import { calculateOverallProgress, calculateTrackProgress, findNextLesson, levelFromProgress } from "./academyMetrics.js";
 import { gradeNotificationPayload, lessonNotificationPayload, reportNotificationPayload } from "./notificationPayloads.js";
 import { ENV } from "./_core/env.js";
 
@@ -608,7 +608,8 @@ async function getStudentDashboard(studentId: number) {
   const paths = enrollmentRows.map(({ path }) => {
     const pathLessons = allLessons.filter(lesson => lesson.pathId === path.id);
     const completedLessonCount = pathLessons.filter(lesson => completedIds.has(lesson.id)).length;
-    return { ...path, lessonCount: pathLessons.length, completedLessonCount, progress: calculateTrackProgress({ lessonCount: pathLessons.length, completedLessonCount }) };
+    const next = findNextLesson(pathLessons, completedIds);
+    return { ...path, lessonCount: pathLessons.length, completedLessonCount, progress: calculateTrackProgress({ lessonCount: pathLessons.length, completedLessonCount }), nextLesson: next ? { id: next.id, title: next.title, lessonType: next.lessonType } : null };
   });
   const overallProgress = calculateOverallProgress(paths.map(path => path.progress));
   const averageScore = resultRows.length ? Math.round(resultRows.reduce((total, row) => total + row.result.score, 0) / resultRows.length) : null;

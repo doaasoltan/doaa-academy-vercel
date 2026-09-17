@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { calculateOverallProgress, calculateTrackProgress, gradeLabel, levelFromProgress } from "./academyMetrics.js";
+import { calculateOverallProgress, calculateTrackProgress, findNextLesson, gradeLabel, levelFromProgress } from "./academyMetrics.js";
 
 describe("academy progress metrics", () => {
   it("calculates path completion safely and clamps invalid values", () => {
@@ -21,5 +21,26 @@ describe("academy progress metrics", () => {
     expect(gradeLabel(82)).toBe("متقن");
     expect(gradeLabel(61)).toBe("جيد");
     expect(gradeLabel(45)).toBe("يحتاج مراجعة");
+  });
+
+  it("finds the first incomplete lesson by position for resume learning", () => {
+    const lessons = [
+      { id: 1, position: 1 },
+      { id: 2, position: 2 },
+      { id: 3, position: 3 },
+    ];
+    expect(findNextLesson(lessons, new Set([1]))).toMatchObject({ id: 2 });
+    expect(findNextLesson(lessons, [])).toMatchObject({ id: 1 });
+    expect(findNextLesson(lessons, new Set([1, 2, 3]))).toBeNull();
+    expect(findNextLesson([], new Set())).toBeNull();
+  });
+
+  it("respects lesson ordering even when rows arrive unsorted", () => {
+    const lessons = [
+      { id: 9, position: 3 },
+      { id: 7, position: 1 },
+      { id: 8, position: 2 },
+    ];
+    expect(findNextLesson(lessons, new Set([7]))).toMatchObject({ id: 8 });
   });
 });
