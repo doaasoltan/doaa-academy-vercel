@@ -7,33 +7,58 @@ import { startLogin } from "@/const";
 import { useIsMobile } from "@/hooks/useMobile";
 import { Code2, LogOut, PanelRightOpen } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
+import { useState } from "react";
 import { useLocation } from "wouter";
 import { DashboardLayoutSkeleton } from "./DashboardLayoutSkeleton";
 
-export type AcademyMenuItem = { icon: LucideIcon; label: string; path: string };
+export type AcademyMenuItem = { icon: LucideIcon; label: string; path: string; sectionId?: string };
+
+function scrollToSection(sectionId: string) {
+  const target = document.getElementById(sectionId);
+  if (target) {
+    target.scrollIntoView({ behavior: "smooth", block: "start" });
+    return;
+  }
+  // المحتوى قد يُحمّل بعد النقر (تحميل البيانات)، فنعيد المحاولة بعد لحظات.
+  setTimeout(() => document.getElementById(sectionId)?.scrollIntoView({ behavior: "smooth", block: "start" }), 500);
+}
 
 export default function DashboardLayout({ children, menuItems, title }: { children: React.ReactNode; menuItems: AcademyMenuItem[]; title: string }) {
   const { loading, user, logout } = useAuth();
   const [location, setLocation] = useLocation();
   const isMobile = useIsMobile();
+  const [activeSection, setActiveSection] = useState<string | null>(null);
 
   if (loading) return <DashboardLayoutSkeleton />;
   if (!user) {
     return <div className="auth-gate"><div className="auth-gate-card"><BrandMark /><h1>رحلتك البرمجية تبدأ من هنا</h1><p>سجّلي الدخول للوصول إلى مسارك التعليمي ولوحة متابعتك.</p><Button className="academy-button" onClick={() => startLogin(location)}>تسجيل الدخول</Button></div></div>;
   }
 
-  const active = menuItems.find(item => item.path === location)?.label ?? title;
+  const currentSection = activeSection ?? menuItems.find(entry => entry.sectionId)?.sectionId;
+  const active = menuItems.find(item => (item.sectionId ? item.sectionId === currentSection : item.path === location))?.label ?? title;
   return <SidebarProvider className="academy-shell" dir="rtl">
     <Sidebar side="right" collapsible="icon" className="academy-sidebar border-l border-white/10">
       <SidebarHeader className="h-24 p-4"><BrandMark compact /></SidebarHeader>
       <SidebarContent className="px-3 pt-2">
         <p className="sidebar-kicker px-2 pb-3 group-data-[collapsible=icon]:hidden">{title}</p>
         <SidebarMenu className="gap-2">
-          {menuItems.map(item => <SidebarMenuItem key={item.label}>
-            <SidebarMenuButton isActive={location === item.path} onClick={() => setLocation(item.path)} tooltip={item.label} className="academy-menu-item h-12">
-              <item.icon className="size-5" /><span>{item.label}</span>
-            </SidebarMenuButton>
-          </SidebarMenuItem>)}
+          {menuItems.map(item => {
+            const isSectionActive = item.sectionId ? currentSection === item.sectionId : location === item.path;
+            return <SidebarMenuItem key={item.label}>
+              <SidebarMenuButton isActive={isSectionActive} onClick={() => {
+                if (item.sectionId) {
+                  setActiveSection(item.sectionId);
+                  if (location !== item.path) setLocation(item.path);
+                  // مهلة قصيرة لتُبنى الصفحة أولاً عند التنقل بين المسارات.
+                  setTimeout(() => scrollToSection(item.sectionId as string), location !== item.path ? 350 : 0);
+                } else {
+                  setLocation(item.path);
+                }
+              }} tooltip={item.label} className="academy-menu-item h-12">
+                <item.icon className="size-5" /><span>{item.label}</span>
+              </SidebarMenuButton>
+            </SidebarMenuItem>;
+          })}
         </SidebarMenu>
       </SidebarContent>
       <SidebarFooter className="p-3">
