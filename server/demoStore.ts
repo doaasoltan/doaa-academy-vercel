@@ -20,7 +20,7 @@ import type {
   User,
 } from "../drizzle/schema.js";
 import { calculateOverallProgress, calculateTrackProgress, levelFromProgress } from "./academyMetrics.js";
-import { gradeNotificationPayload, reportNotificationPayload } from "./notificationPayloads.js";
+import { gradeNotificationPayload, lessonNotificationPayload, reportNotificationPayload } from "./notificationPayloads.js";
 import { ENV } from "./_core/env.js";
 
 export function isDemoMode() {
@@ -423,17 +423,36 @@ async function createLesson(input: {
     createdAt: now,
     updatedAt: now,
   });
+  notifyEnrolledStudentsOfNewLesson(input.pathId, input.title, input.lessonType);
   persist();
   return { id };
 }
 
+function notifyEnrolledStudentsOfNewLesson(pathId: number, lessonTitle: string, lessonType: string) {
+  const store = getState();
+  const studentIds = [...new Set(store.enrollments.filter(item => item.pathId === pathId).map(item => item.studentId))];
+  if (!studentIds.length) return;
+  const pathTitle = store.learningPaths.find(item => item.id === pathId)?.title ?? "مسارك";
+  const payload = lessonNotificationPayload(lessonTitle, pathTitle, pathId, lessonType === "video");
+  for (const studentId of studentIds) {
+    store.notifications.push({
+      id: nextId("notifications"),
+      recipientId: studentId,
+      ...payload,
+      isRead: false,
+      createdAt: new Date(),
+    });
+  }
+}
+
 async function setLessonPublished(lessonId: number, isPublished: boolean) {
   const found = getState().lessons.find(item => item.id === lessonId);
-  if (found) {
-    found.isPublished = isPublished;
-    found.updatedAt = new Date();
-    persist();
-  }
+  if (!found) return;
+  const newlyPublished = isPublished && !found.isPublished;
+  found.isPublished = isPublished;
+  found.updatedAt = new Date();
+  if (newlyPublished) notifyEnrolledStudentsOfNewLesson(found.pathId, found.title, found.lessonType);
+  persist();
 }
 
 async function updateLesson(lessonId: number, input: {

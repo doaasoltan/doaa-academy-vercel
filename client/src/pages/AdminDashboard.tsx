@@ -151,7 +151,7 @@ function CreatePathDialog({ onDone }: { onDone: () => void }) {
 
 function CreateLessonDialog({ paths, onDone }: { paths: PathChoice[]; onDone: () => void }) {
   const [open, setOpen] = useState(() => new URLSearchParams(window.location.search).get("dialog") === "lesson");
-  const create = trpc.admin.createLesson.useMutation({ onSuccess: () => { toast.success("تمت إضافة الدرس وملفه ونشره للطالبات."); setOpen(false); onDone(); }, onError: error => toast.error(error.message) });
+  const create = trpc.admin.createLesson.useMutation({ onSuccess: () => { toast.success("تمت إضافة الدرس ونشره وإشعار الطالبات المسجلات."); setOpen(false); onDone(); }, onError: error => toast.error(error.message) });
   const [form, setForm] = useState({ pathId: 0, title: "", summary: "", lessonType: "article" as "article" | "workshop" | "resource", attachmentUrl: "", attachmentName: "", externalPdfUrl: "", durationMinutes: 20, position: 1 });
   const submit = (event: React.FormEvent) => {
     event.preventDefault();
@@ -167,7 +167,7 @@ function CreateLessonDialog({ paths, onDone }: { paths: PathChoice[]; onDone: ()
 
 function CreateVideoDialog({ paths, onDone }: { paths: PathChoice[]; onDone: () => void }) {
   const [open, setOpen] = useState(() => new URLSearchParams(window.location.search).get("dialog") === "video");
-  const create = trpc.admin.createLesson.useMutation({ onSuccess: () => { toast.success("تمت إضافة الفيديو ونشره للطالبات."); setOpen(false); onDone(); }, onError: error => toast.error(error.message) });
+  const create = trpc.admin.createLesson.useMutation({ onSuccess: () => { toast.success("تمت إضافة الفيديو ونشره وإشعار الطالبات المسجلات."); setOpen(false); onDone(); }, onError: error => toast.error(error.message) });
   const [form, setForm] = useState({ pathId: 0, title: "", summary: "", sourceUrl: "", externalUrl: "", durationMinutes: 15, position: 1 });
   const submit = (event: React.FormEvent) => {
     event.preventDefault();

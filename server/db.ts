@@ -13,7 +13,7 @@ import {
   users,
 } from "../drizzle/schema.js";
 import { calculateOverallProgress, calculateTrackProgress, levelFromProgress } from "./academyMetrics.js";
-import { gradeNotificationPayload, reportNotificationPayload } from "./notificationPayloads.js";
+import { gradeNotificationPayload, lessonNotificationPayload, reportNotificationPayload } from "./notificationPayloads.js";
 import { ENV } from "./_core/env.js";
 import { demoStore, isDemoMode } from "./demoStore.js";
 
@@ -165,7 +165,18 @@ export async function createLesson(input: {
   if (isDemoMode()) return demoStore.createLesson(input);
   const db = await getDb();
   if (!db) throw new Error("قاعدة البيانات غير متاحة حالياً");
-  return createLessonWithDb(db, input);
+  const result = await createLessonWithDb(db, input);
+  await notifyPathStudentsOfNewLesson(db, input.pathId, input.title, input.lessonType);
+  return result;
+}
+
+export async function notifyPathStudentsOfNewLesson(db: any, pathId: number, lessonTitle: string, lessonType: string) {
+  const enrollmentRows = await db.select({ studentId: enrollments.studentId }).from(enrollments).where(eq(enrollments.pathId, pathId));
+  const studentIds = [...new Set(enrollmentRows.map((row: { studentId: number }) => row.studentId))];
+  if (!studentIds.length) return;
+  const pathRows = await db.select({ title: learningPaths.title }).from(learningPaths).where(eq(learningPaths.id, pathId)).limit(1);
+  const payload = lessonNotificationPayload(lessonTitle, pathRows[0]?.title ?? "مسارك", pathId, lessonType === "video");
+  await db.insert(notifications).values(studentIds.map(studentId => ({ recipientId: studentId, ...payload })));
 }
 
 export async function createLessonWithDb(db: any, input: {
@@ -188,7 +199,11 @@ export async function setLessonPublished(lessonId: number, isPublished: boolean)
   if (isDemoMode()) return demoStore.setLessonPublished(lessonId, isPublished);
   const db = await getDb();
   if (!db) throw new Error("قاعدة البيانات غير متاحة حالياً");
+  const current = (await db.select({ isPublished: lessons.isPublished, pathId: lessons.pathId, title: lessons.title, lessonType: lessons.lessonType }).from(lessons).where(eq(lessons.id, lessonId)).limit(1))[0];
   await db.update(lessons).set({ isPublished }).where(eq(lessons.id, lessonId));
+  if (isPublished && current && !current.isPublished) {
+    await notifyPathStudentsOfNewLesson(db, current.pathId, current.title, current.lessonType);
+  }
 }
 
 export async function updateLesson(lessonId: number, input: {

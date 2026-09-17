@@ -15,3 +15,12 @@ export function reportNotificationPayload() {
     link: "/student",
   };
 }
+
+export function lessonNotificationPayload(lessonTitle: string, pathTitle: string, pathId: number, isVideo: boolean) {
+  return {
+    type: "lesson" as const,
+    title: isVideo ? "فيديو جديد في مسارك" : "درس جديد في مسارك",
+    message: `أُضيف "${lessonTitle}" إلى مسار "${pathTitle}" — تابعيه الآن.`,
+    link: `/paths/${pathId}`,
+  };
+}
